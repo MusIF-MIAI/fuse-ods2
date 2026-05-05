@@ -172,17 +172,25 @@ static void log_home( const struct VCB *vcb ) {
     for( int i = 11; i >= 0 && volname[i] == ' '; --i )
         volname[i] = '\0';
 
+    /* In a read-only mount simtools' get_scb() is skipped, so
+     * d->clustersize / d->max_cluster / d->free_clusters stay zero.
+     * Reconstruct the first two from the home block and the device
+     * size; free-clusters needs the bitmap (write-side only) so we
+     * just say "n/a" rather than print a misleading zero. */
+    unsigned cluster = (unsigned)F11WORD( d->home.hm2$w_cluster );
+    if( cluster == 0 ) cluster = 1;
+    off_t    devsz   = (d->dev != NULL) ? d->dev->eofptr : 0;
+    unsigned long max_cluster = cluster
+        ? (unsigned long)((devsz / 512) / cluster)
+        : 0;
+
     fprintf( stderr,
         "fuse-ods2: mounted volume \"%s\"\n"
         "           cluster size  : %u blocks\n"
-        "           max cluster   : %u\n"
-        "           free clusters : %u\n"
+        "           total clusters: %lu\n"
+        "           free clusters : n/a (read-only)\n"
         "           devices in set: %u\n",
-        volname,
-        (unsigned)d->clustersize,
-        (unsigned)d->max_cluster,
-        (unsigned)d->free_clusters,
-        vcb->devices );
+        volname, cluster, max_cluster, vcb->devices );
 }
 
 static int do_mount( void ) {
