@@ -1,5 +1,7 @@
 # fuse-ods2
 
+[![build](https://github.com/MusIF-MIAI/fuse-ods2/actions/workflows/build.yml/badge.svg)](https://github.com/MusIF-MIAI/fuse-ods2/actions/workflows/build.yml)
+
 Read-only FUSE driver for **ODS-2** (Files-11 On-Disk Structure Level 2),
 the native filesystem of OpenVMS.
 
@@ -14,14 +16,15 @@ Early development. See [`TODO.md`](TODO.md) for the roadmap.
 
 ## Building
 
-### Linux
+### Linux (Debian / Ubuntu)
 
 ```sh
 sudo apt install libfuse3-dev pkg-config build-essential
 make
 ```
 
-(For Fedora / Arch: `fuse3-devel` / `fuse3` packages.)
+CI builds on `debian:stable`.  Fedora / Arch users want
+`fuse3-devel` / `fuse3` instead.
 
 ### macOS (best-effort)
 
