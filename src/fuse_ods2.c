@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "ods2_ops.h"
+#include "recfmt.h"
 
 #include "access.h"
 #include "f11def.h"
@@ -216,6 +217,7 @@ static int do_mount( void ) {
 }
 
 static void do_dismount( void ) {
+    recfmt_clear_cache();
     if( ods2_vcb != NULL ) {
         dismount( ods2_vcb, 0 );
         ods2_vcb = NULL;

@@ -7,11 +7,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  # Opt JS-based actions into Node.js 24 ahead of the default flip
-  # (Node 20 is being deprecated on GitHub-hosted runners).
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   debian:
     runs-on: ubuntu-latest
@@ -24,7 +19,7 @@ jobs:
           apt-get install -y --no-install-recommends \
             build-essential pkg-config libfuse3-dev fuse3 git ca-certificates
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Show toolchain
         run: |
@@ -46,7 +41,7 @@ jobs:
         run: ./fuse-ods2 -h || true
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: fuse-ods2-debian
           path: fuse-ods2

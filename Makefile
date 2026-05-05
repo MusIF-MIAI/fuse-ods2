@@ -51,7 +51,8 @@ LIB_OBJS := $(LIB_SRCS:%.c=$(BUILD)/%.o)
 NO_FUSE_SRCS := \
     src/compat_glue.c \
     src/phyfuse.c     \
-    src/lookup.c
+    src/lookup.c      \
+    src/recfmt.c
 
 FUSE_SRCS := \
     src/fuse_ods2.c   \

@@ -65,11 +65,12 @@ brew install macfuse pkg-config
 - [ ] Honour highwater (return zeros past `fcb->highwater`)  *(deferred: most images are dense)*
 - [ ] Test: `cmp` STREAM_LF and FIX files against an ods2 extraction  *(deferred to Linux validation)*
 
-## Phase 4 - text-mode (`-o textmode`)
-- [ ] `src/recfmt.c`: streaming reader (FCB, byte_offset, len) -> "decoded" bytes
-- [ ] Per-record-format strategies (FIX/VAR/VFC/STM/STMLF/STMCR)
-- [ ] Recompute `st_size` in `getattr` when textmode (cache the logical length)
-- [ ] Test on `.LIS` / `.TXT` files in VAR format
+## Phase 4 - text-mode (`-o textmode`) [CODE DONE, RUNTIME TBD]
+- [x] `src/recfmt.c`: full-file decoder with per-FID buffer cache
+- [x] Per-record-format strategies (FIX/VAR/VFC/STM/STMLF/STMCR + UDF passthrough)
+- [x] Recompute `st_size` in `getattr` when textmode (cache the logical length)
+- [x] Cache cleared on dismount
+- [ ] Test on `.LIS` / `.TXT` files in VAR format  *(deferred to phase 7 e2e)*
 
 ## Phase 5 - offset + volume set
 - [ ] `-o offset=N`: implemented in phyfuse, exposed on the CLI

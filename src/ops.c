@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "ods2_ops.h"
+#include "recfmt.h"
 
 #include "access.h"
 #include "f11def.h"
@@ -73,6 +74,24 @@ int ods2_getattr( const char *path, struct stat *st,
         st->st_uid = getuid();
     if( !ods2_rt.force_gid && st->st_gid == 0 )
         st->st_gid = getgid();
+
+    /* In textmode the on-disk size is wrong (record headers, padding,
+     * implicit LFs).  Open the file briefly to compute the decoded
+     * length; the result is cached, so subsequent stat/read are cheap.
+     */
+    if( ods2_rt.textmode && S_ISREG( st->st_mode )
+        && recfmt_textmode_eligible( head ) ) {
+        deaccesshead( vioc, NULL, 0 );
+
+        struct FCB *fcb = NULL;
+        if( $SUCCESSFUL( accessfile( ods2_vcb, &fid, &fcb, 0 ) ) ) {
+            ssize_t lsize = recfmt_logical_size( fcb );
+            if( lsize >= 0 )
+                st->st_size = (off_t)lsize;
+            deaccessfile( fcb );
+        }
+        return 0;
+    }
 
     deaccesshead( vioc, NULL, 0 );
     return 0;
@@ -224,6 +243,15 @@ int ods2_read( const char *path, char *out, size_t size, off_t offset,
     struct FCB *fcb = (struct FCB *)(uintptr_t)fi->fh;
     if( fcb == NULL )
         return -EBADF;
+
+    /* In textmode redirect through the record-format decoder; it has
+     * its own size accounting and cached buffer. */
+    if( ods2_rt.textmode && fcb->head != NULL
+        && recfmt_textmode_eligible( fcb->head ) ) {
+        ssize_t n = recfmt_read( fcb, offset, out, size );
+        if( n < 0 ) return -EIO;
+        return (int)n;
+    }
 
     /* Logical end of file derived from the RECATTR.  EOF block is the
      * first block past the last block holding data; ffb is the count
