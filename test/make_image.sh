@@ -48,9 +48,11 @@ ODS2="$OUT_DIR/ods2"
 # relative paths with no leading slashes.  HELLO.TXT is staged via the
 # parent path "src/HELLO.TXT" which still contains a '/', so we quote
 # those too.
+# INITIALIZE auto-mounts the freshly created image, so we skip the
+# explicit MOUNT.  ods2 prompts for confirmation on destructive ops;
+# we feed 'yes\n' on stdin so it behaves non-interactively.
 cat > "$OUT_DIR/build.com" <<'EOF'
 INITIALIZE /MEDIUM:RM05 /LOG test.dsk TESTVOL
-MOUNT test.dsk TESTVOL
 COPY /TO_FILES-11/ASCII /LOG "src/HELLO.TXT" [000000]HELLO.TXT
 COPY /TO_FILES-11/ASCII /LOG "src/LINES.TXT" [000000]LINES.TXT
 CREATE /DIRECTORY /LOG [SUB]
@@ -64,7 +66,7 @@ EXIT
 EOF
 
 rm -f "$OUT_DIR/test.dsk"
-( cd "$OUT_DIR" && "$ODS2" "@build.com" )
+( cd "$OUT_DIR" && yes | "$ODS2" "@build.com" )
 
 echo "made: $OUT_DIR/test.dsk"
 ls -lah "$OUT_DIR/test.dsk"
