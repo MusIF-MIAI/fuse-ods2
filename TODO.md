@@ -85,10 +85,12 @@ brew install macfuse pkg-config
 - [x] `readlink` -> `EINVAL` (ODS-2 has no symlinks)
 - [x] Every write op returns `EROFS` (`mknod`, `mkdir`, `unlink`, `rmdir`, `symlink`, `rename`, `link`, `chmod`, `chown`, `truncate`, `write`, `setxattr`, `removexattr`, `create`, `utimens`, `fallocate`, `copy_file_range`)
 
-## Phase 7 - tests and CI
-- [ ] `test/make_image.sh`: produce a reproducible image (STREAM_LF, FIX, VAR files; nested dirs; multiple versions)
-- [ ] `test/smoke.sh`: ls / find / cat / cmp on the known fileset
-- [ ] (Stretch) GitHub Actions workflow for Linux build + smoke
+## Phase 7 - tests and CI [INITIAL DONE]
+- [x] `test/make_image.sh`: builds upstream ods2, generates an RM05 image with HELLO.TXT (multi-version), LINES.TXT, [SUB]INFO.TXT
+- [x] `test/smoke.sh`: mounts via fuse-ods2, validates ls/cat/subdir traversal, write rejection, allversions exposure
+- [x] CI: separate `e2e` job in privileged container exercises the full pipeline
+- [ ] FIX/VAR/VFC textmode coverage (needs ods2 COPY format selection)
+- [ ] cmp byte-exact against `ods2 COPY /FROM_FILES-11`
 
 ## Phase 8 - macOS portability (parallel)
 - [ ] Detect platform in `Makefile` (Linux -> `pkg-config fuse3`; macOS -> `pkg-config fuse` via macFUSE)

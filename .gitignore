@@ -12,6 +12,7 @@ fuse-ods2
 .vscode/
 .idea/
 
-# Test images
+# Test images and generated artefacts
 test/*.dsk
 test/*.img
+test/_out/

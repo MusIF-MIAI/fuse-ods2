@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Build the upstream ods2 utility and use it to create a small,
+# reproducible ODS-2 test image with files of known content.
+#
+# Output (in $OUT_DIR, default ./test/_out):
+#   test.dsk           the ODS-2 image (RM05 medium, label TESTVOL)
+#   src/HELLO.TXT      original byte-for-byte copy of the canned files
+#   src/LINES.TXT
+#   src/SUB/INFO.TXT
+#   ods2               the upstream binary (kept for the smoke driver)
+
+set -euo pipefail
+
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+OUT_DIR="${OUT_DIR:-$ROOT/test/_out}"
+SIM_DIR="$OUT_DIR/simtools"
+
+mkdir -p "$OUT_DIR/src/SUB"
+
+# 1) Canned source files.  Plain ASCII so the ods2 COPY /ASCII path is
+# happy and the byte-level comparison is trivial.
+cat > "$OUT_DIR/src/HELLO.TXT" <<'EOF'
+Hello from ODS-2
+EOF
+printf 'line one\nline two\nline three\n' > "$OUT_DIR/src/LINES.TXT"
+printf 'nested file\n' > "$OUT_DIR/src/SUB/INFO.TXT"
+
+# 2) Upstream ods2 (one-shot, depth-1 clone).
+if [ ! -x "$OUT_DIR/ods2" ]; then
+    rm -rf "$SIM_DIR"
+    git clone --depth=1 https://github.com/open-simh/simtools "$SIM_DIR"
+    (
+        cd "$SIM_DIR/extracters/ods2"
+        ln -sf makefile.unix Makefile
+        make -j"$(nproc 2>/dev/null || echo 2)"
+    )
+    cp "$SIM_DIR/extracters/ods2/ods2"   "$OUT_DIR/ods2"
+    # ods2 looks up its help / message catalogues next to the binary.
+    cp -f "$SIM_DIR/extracters/ods2/"*.hlb "$OUT_DIR/" 2>/dev/null || true
+    cp -f "$SIM_DIR/extracters/ods2/"*.mdf "$OUT_DIR/" 2>/dev/null || true
+fi
+
+ODS2="$OUT_DIR/ods2"
+
+# 3) Drive ods2 with a command file.  Using @file rather than the
+# CLI form keeps the dollar-sign separator out of the shell quoting
+# rules.
+cat > "$OUT_DIR/build.com" <<EOF
+INITIALIZE /MEDIUM:RM05 /LOG $OUT_DIR/test.dsk TESTVOL
+MOUNT $OUT_DIR/test.dsk TESTVOL
+COPY /TO_FILES-11/ASCII $OUT_DIR/src/HELLO.TXT [000000]HELLO.TXT
+COPY /TO_FILES-11/ASCII $OUT_DIR/src/LINES.TXT [000000]LINES.TXT
+CREATE /DIRECTORY [SUB]
+COPY /TO_FILES-11/ASCII $OUT_DIR/src/SUB/INFO.TXT [SUB]INFO.TXT
+COPY /TO_FILES-11/ASCII $OUT_DIR/src/HELLO.TXT [000000]HELLO.TXT
+COPY /TO_FILES-11/ASCII $OUT_DIR/src/HELLO.TXT [000000]HELLO.TXT
+DISMOUNT A:
+EXIT
+EOF
+
+rm -f "$OUT_DIR/test.dsk"
+"$ODS2" "@$OUT_DIR/build.com"
+
+echo "made: $OUT_DIR/test.dsk"
+ls -lah "$OUT_DIR/test.dsk"

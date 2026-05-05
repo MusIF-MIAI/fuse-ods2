@@ -46,3 +46,39 @@ jobs:
           name: fuse-ods2-debian
           path: fuse-ods2
           if-no-files-found: error
+
+  e2e:
+    needs: debian
+    runs-on: ubuntu-latest
+    # Privileged container is needed so /dev/fuse is usable inside.
+    container:
+      image: debian:stable
+      options: >-
+        --device /dev/fuse
+        --cap-add SYS_ADMIN
+        --security-opt apparmor:unconfined
+    steps:
+      - name: Install runtime + build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential pkg-config libfuse3-dev fuse3 \
+            git ca-certificates perl
+
+      - uses: actions/checkout@v5
+
+      - name: Build fuse-ods2
+        run: make bin
+
+      - name: Generate ODS-2 test image
+        run: ./test/make_image.sh
+
+      - name: Run smoke test
+        run: ./test/smoke.sh
+
+      - name: Show debug output on failure
+        if: failure()
+        run: |
+          ls -la test/_out || true
+          ./fuse-ods2 -h || true
+          dmesg | tail -50 || true
