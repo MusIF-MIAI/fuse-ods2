@@ -31,22 +31,22 @@ brew install macfuse pkg-config
 
 ---
 
-## Phase 0 - Project scaffolding
-- [ ] Create `src/`, `ods2lib/`, `test/`, `build/`
-- [ ] Drop the read-only subset of the upstream ODS-2 sources into `ods2lib/`
-- [ ] Stub `phyvirt.h` with the API used by `access.c`
-- [ ] Write a portable `Makefile` (Linux: `pkg-config fuse3`; macOS: `pkg-config fuse` via macFUSE)
-- [ ] Verify `ods2lib/` builds on its own as `libods2.a`
-- [ ] Stub `compat_glue.c` with a minimal `printmsg` and write-side stoppers
+## Phase 0 - Project scaffolding [DONE]
+- [x] Create `src/`, `ods2lib/`, `test/`, `build/`
+- [x] Drop the read-only subset of the upstream ODS-2 sources into `ods2lib/`
+- [x] Stub `phyvirt.h` with the API used by `access.c`
+- [x] Write a portable `Makefile` (Linux: `pkg-config fuse3`; macOS: `pkg-config fuse` via macFUSE)
+- [x] Verify `ods2lib/` builds on its own as `libods2.a`
+- [x] Stub `compat_glue.c` with a minimal `printmsg` and write-side stoppers
 
-## Phase 1 - phyfuse backend + mount bring-up
-- [ ] `src/phyfuse.c`: implement `virt_open`/`virt_read`/`virt_close` on top of `pread()` with offset
-- [ ] `src/fuse_ods2.c`: argv / `-o` parsing (image path, mountpoint, options)
-- [ ] Wire `mount(...)` at FUSE startup; `dismount(...)` at shutdown
-- [ ] Print HOME diagnostics (volume name, size, free clusters) under `-o debug`
-- [ ] Smoke: `fuse-ods2 -d image.dsk /tmp/m` mounts cleanly, mountpoint is empty until phase 2
+## Phase 1 - phyfuse backend + mount bring-up [DONE]
+- [x] `src/phyfuse.c`: implement `virt_open`/`virt_read`/`virt_close` on top of `pread()` with offset
+- [x] `src/fuse_ods2.c`: argv / `-o` parsing (image path, mountpoint, options)
+- [x] Wire `mount(...)` at FUSE startup; `dismount(...)` at shutdown
+- [x] Print HOME diagnostics (volume name, size, free clusters) under `-o debug`
+- [ ] Smoke: `fuse-ods2 -d image.dsk /tmp/m` mounts cleanly, mountpoint is empty until phase 2  *(pending: requires libfuse3, deferred to Linux validation)*
 
-## Phase 2 - getattr + readdir
+## Phase 2 - getattr + readdir [IN PROGRESS]
 - [ ] `src/lookup.c`: convert POSIX paths (`/A/B/FILE.EXT`) to VMS strings (`[A.B]FILE.EXT;`) for `direct_dirid` + `direct(DIRECT_FIND)`
 - [ ] LRU cache (path -> FID), 1024 entries
 - [ ] `ops_getattr`: populate `struct stat` (size, blocks, mtime, ctime, mode, uid, gid)
