@@ -48,10 +48,14 @@ fi
 ok "mounted at $MNT"
 
 # ---- listing root ----
+echo "smoke: --- ls -la $MNT ---"
+ls -la "$MNT" || true
+echo "smoke: --- end ---"
+
 listing="$(ls "$MNT")"
-echo "$listing" | grep -q '^HELLO\.TXT$'  || fail "HELLO.TXT missing in root listing"
-echo "$listing" | grep -q '^LINES\.TXT$'  || fail "LINES.TXT missing in root listing"
-echo "$listing" | grep -q '^SUB$'         || fail "SUB directory missing in root listing"
+echo "$listing" | grep -q '^HELLO\.TXT$'  || fail "HELLO.TXT missing in root listing (got: $listing)"
+echo "$listing" | grep -q '^LINES\.TXT$'  || fail "LINES.TXT missing in root listing (got: $listing)"
+echo "$listing" | grep -q '^SUB$'         || fail "SUB directory missing in root listing (got: $listing)"
 ok "root listing contains the expected entries"
 
 # ---- file content ----
