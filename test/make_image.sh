@@ -42,24 +42,27 @@ fi
 
 ODS2="$OUT_DIR/ods2"
 
-# 3) Drive ods2 with a command file.  Using @file rather than the
-# CLI form keeps the dollar-sign separator out of the shell quoting
-# rules.
-cat > "$OUT_DIR/build.com" <<EOF
-INITIALIZE /MEDIUM:RM05 /LOG $OUT_DIR/test.dsk TESTVOL
-MOUNT $OUT_DIR/test.dsk TESTVOL
-COPY /TO_FILES-11/ASCII $OUT_DIR/src/HELLO.TXT [000000]HELLO.TXT
-COPY /TO_FILES-11/ASCII $OUT_DIR/src/LINES.TXT [000000]LINES.TXT
+# 3) Drive ods2 with a command file.  ods2 parses '/' as the start of
+# a DCL qualifier, so any Unix path with slashes must be wrapped in
+# double quotes ("/path/to/file").  Easiest: cd into OUT_DIR and use
+# relative paths with no leading slashes.  HELLO.TXT is staged via the
+# parent path "src/HELLO.TXT" which still contains a '/', so we quote
+# those too.
+cat > "$OUT_DIR/build.com" <<'EOF'
+INITIALIZE /MEDIUM:RM05 /LOG test.dsk TESTVOL
+MOUNT test.dsk TESTVOL
+COPY /TO_FILES-11/ASCII "src/HELLO.TXT" [000000]HELLO.TXT
+COPY /TO_FILES-11/ASCII "src/LINES.TXT" [000000]LINES.TXT
 CREATE /DIRECTORY [SUB]
-COPY /TO_FILES-11/ASCII $OUT_DIR/src/SUB/INFO.TXT [SUB]INFO.TXT
-COPY /TO_FILES-11/ASCII $OUT_DIR/src/HELLO.TXT [000000]HELLO.TXT
-COPY /TO_FILES-11/ASCII $OUT_DIR/src/HELLO.TXT [000000]HELLO.TXT
+COPY /TO_FILES-11/ASCII "src/SUB/INFO.TXT" [SUB]INFO.TXT
+COPY /TO_FILES-11/ASCII "src/HELLO.TXT" [000000]HELLO.TXT
+COPY /TO_FILES-11/ASCII "src/HELLO.TXT" [000000]HELLO.TXT
 DISMOUNT A:
 EXIT
 EOF
 
 rm -f "$OUT_DIR/test.dsk"
-"$ODS2" "@$OUT_DIR/build.com"
+( cd "$OUT_DIR" && "$ODS2" "@build.com" )
 
 echo "made: $OUT_DIR/test.dsk"
 ls -lah "$OUT_DIR/test.dsk"
