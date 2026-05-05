@@ -282,7 +282,7 @@ static void *wcb_create( uint32_t hashval, void *keyval, vmscond_t *retsts ) {
 
     UNUSED(hashval);
 
-    wcb = (struct WCB *) calloc( sizeof(struct WCB), 1 );
+    wcb = (struct WCB *) calloc( 1, sizeof(struct WCB) );
 
     if( wcb == NULL ) {
         *retsts = SS$_INSFMEM;

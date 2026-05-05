@@ -9,7 +9,9 @@ RANLIB  ?= ranlib
 CSTD    := -std=c99
 WARN    := -Wall -Wextra -Wno-unused-parameter -Wno-unused-function \
            -Wno-sign-compare -Wno-missing-field-initializers
-DEFS    := -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L
+# _DEFAULT_SOURCE is needed alongside _POSIX_C_SOURCE on glibc so that
+# realpath() (used by ods2lib/compat.c) and pread() get declared.
+DEFS    := -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 OPT     ?= -O2 -g
 
 CFLAGS  ?= $(CSTD) $(WARN) $(OPT)
