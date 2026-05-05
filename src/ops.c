@@ -101,9 +101,13 @@ int ods2_getattr( const char *path, struct stat *st,
 
 /* ------------------------------------------------------ readdir */
 
+#define ODS2_POSIX_NAMEMAX (40 + 1 + 40 + 1 + 5)
+
 struct readdir_ctx {
     void                  *buf;
     fuse_fill_dir_t        filler;
+    off_t                  offset;
+    off_t                  next_off;
 };
 
 static int has_dir_suffix( const char *raw, int rawlen ) {
@@ -141,9 +145,13 @@ static void emit_name( const char *raw, int rawlen, int version, int is_dir,
 static int readdir_cb( const char *name, int namelen, int version,
                        const struct fiddef *fid, void *ctx ) {
     struct readdir_ctx *r = ctx;
-    char display[80];
+    char display[ODS2_POSIX_NAMEMAX + 1];
     struct stat st;
     int is_dir = 0;
+    off_t this_off = r->next_off++;
+
+    if( this_off <= r->offset )
+        return 0;
 
     struct VIOC *vioc = NULL;
     struct HEAD *head = NULL;
@@ -170,7 +178,7 @@ static int readdir_cb( const char *name, int namelen, int version,
      */
     st.st_mode = is_dir ? S_IFDIR : S_IFREG;
 
-    return r->filler( r->buf, display, &st, 0, 0 );
+    return r->filler( r->buf, display, &st, this_off, 0 );
 }
 
 int ods2_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
@@ -231,10 +239,24 @@ int ods2_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
         return -ENOTDIR;
     }
 
-    filler( buf, ".",  NULL, 0, 0 );
-    filler( buf, "..", NULL, 0, 0 );
+    off_t next_off = 1;
+    if( offset < next_off && filler( buf, ".", NULL, next_off, 0 ) != 0 ) {
+        deaccessfile( dfcb );
+        return 0;
+    }
+    ++next_off;
+    if( offset < next_off && filler( buf, "..", NULL, next_off, 0 ) != 0 ) {
+        deaccessfile( dfcb );
+        return 0;
+    }
+    ++next_off;
 
-    struct readdir_ctx ctx = { .buf = buf, .filler = filler };
+    struct readdir_ctx ctx = {
+        .buf = buf,
+        .filler = filler,
+        .offset = offset,
+        .next_off = next_off
+    };
 
     sts = ods2_iterate_dir( dfcb,
                             ods2_rt.allversions ? 0 : 1,
@@ -404,7 +426,7 @@ int ods2_statfs( const char *path, struct statvfs *st ) {
     st->f_bavail  = 0;
     st->f_files   = 0;
     st->f_ffree   = 0;
-    st->f_namemax = 80;         /* VMS file spec including version    */
+    st->f_namemax = ODS2_POSIX_NAMEMAX;
     return 0;
 }
 

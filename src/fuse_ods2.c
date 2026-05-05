@@ -83,7 +83,7 @@ static void usage( const char *prog ) {
         "  -o uid=N           force a specific uid on every file\n"
         "  -o gid=N           force a specific gid on every file\n"
         "  -o debug           verbose diagnostics on stderr\n"
-        "  -s                 single-threaded (recommended)\n"
+        "  -s                 single-threaded (always enabled)\n"
         "  -f                 foreground (do not daemonize)\n"
         "  -d                 same as -odebug + -f\n"
         "\n"
@@ -293,6 +293,10 @@ int main( int argc, char *argv[] ) {
     if( cli.help || cli.version ) {
         fuse_opt_free_args( &args );
         return 0;
+    }
+    if( fuse_opt_add_arg( &args, "-s" ) == -1 ) {
+        fuse_opt_free_args( &args );
+        return 1;
     }
 
     /* Read-only is enforced inside every write op (-EROFS).  We do

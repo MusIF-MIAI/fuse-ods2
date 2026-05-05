@@ -1117,7 +1117,7 @@ vmscond_t direct_dirid( struct VCB *vcb, struct dsc$descriptor *dirdsc,
     dirlen = dirdsc->dsc$w_length;
 
     if( (size_t)dirlen > sizeof( nambuf ) -1 )
-        abort();
+        return SS$_BADFILENAME;
     dirnam = dirdsc->dsc$a_pointer;
 
     srcdir.fid$w_num = FID$C_MFD;
@@ -1156,9 +1156,12 @@ vmscond_t direct_dirid( struct VCB *vcb, struct dsc$descriptor *dirdsc,
         if( len == 0 )
             break;
 
+        const size_t suffix_len = sizeof( ".DIR;1" ) - 1;
+        if( len + suffix_len > sizeof( nambuf ) )
+            return SS$_BADFILENAME;
         memcpy( nambuf, bp, len );
-        namdsc.dsc$w_length = (uint16_t)(len + sizeof( ".DIR;1" ) -1);
-        memcpy( nambuf+len, ".DIR;1", namdsc.dsc$w_length );
+        namdsc.dsc$w_length = (uint16_t)(len + suffix_len);
+        memcpy( nambuf + len, ".DIR;1", suffix_len );
 
         namdsc.dsc$a_pointer = nambuf;
 

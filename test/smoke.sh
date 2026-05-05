@@ -77,6 +77,7 @@ ok "write attempt is rejected as expected"
 
 # ---- versioned file (HELLO.TXT was copied 3 times -> versions 1..3) ----
 fusermount3 -u "$MNT"
+wait "$FPID" || true
 "$BIN" -s -o allversions "$IMG" "$MNT"
 for _ in 1 2 3 4 5; do
     if mountpoint -q "$MNT"; then break; fi

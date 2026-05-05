@@ -152,9 +152,10 @@ void ods2_head_to_stat( const struct HEAD *head, struct stat *st ) {
         st->st_gid = (gid_t)F11WORD( head->fh2$l_fileowner.uic$w_grp );
 
     /* Times.  IDENT area lives at fh2$b_idoffset (units of words). */
-    if( head->fh2$b_idoffset >= FH2$C_LENGTH / 2 ) {
+    size_t idoff = (size_t)head->fh2$b_idoffset * sizeof(f11word);
+    if( idoff >= FH2$C_LENGTH && idoff + sizeof(struct IDENT) <= sizeof *head ) {
         const struct IDENT *id = (const struct IDENT *)
-            ((const uint16_t *)head + head->fh2$b_idoffset);
+            ((const char *)head + idoff);
         st->st_mtime = ods2_vmstime_to_time_t( id->fi2$q_revdate );
         st->st_ctime = ods2_vmstime_to_time_t( id->fi2$q_credate );
         st->st_atime = st->st_mtime;
@@ -183,20 +184,24 @@ static char *split_last( char *path ) {
  * argument expected by direct_dirid().  Empty input -> empty output
  * (which direct_dirid() treats as MFD).
  */
-static void posix_dir_to_vms( const char *posix, char *out, size_t outlen ) {
+static int posix_dir_to_vms( const char *posix, char *out, size_t outlen ) {
     size_t o = 0;
     int first = 1;
-    if( outlen == 0 ) return;
+    if( outlen == 0 ) return 0;
     for( const char *p = posix; *p && o + 1 < outlen; ) {
         while( *p == '/' ) ++p;
         if( !*p ) break;
         if( !first && o + 1 < outlen )
             out[o++] = '.';
         first = 0;
-        while( *p && *p != '/' && o + 1 < outlen )
+        while( *p && *p != '/' ) {
+            if( o + 1 >= outlen )
+                return 0;
             out[o++] = (char)toupper( (unsigned char)*p++ );
+        }
     }
     out[o] = '\0';
+    return 1;
 }
 
 /* Parse "FILE.EXT" or "FILE.EXT;n" into (name, version).  When no
@@ -264,6 +269,7 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
     char last_name[128];
     int  last_name_len = -1;
     int  stop = 0;
+    vmscond_t retsts = SS$_NORMAL;
 
     for( uint32_t blk = 1; blk <= efblk && !stop; ++blk ) {
         struct VIOC *vioc = NULL;
@@ -299,6 +305,8 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
                     fprintf( stderr,
                              "fuse-ods2: iterate_dir:   record size=%u too big at offs=%ld\n",
                              (unsigned)size, (long)(p - buf) );
+                retsts = SS$_BADIRECTORY;
+                stop = 1;
                 break;
             }
             if( p + size + 2 > end ) {
@@ -306,16 +314,21 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
                     fprintf( stderr,
                              "fuse-ods2: iterate_dir:   record overruns block at offs=%ld size=%u\n",
                              (long)(p - buf), (unsigned)size );
+                retsts = SS$_BADIRECTORY;
+                stop = 1;
                 break;
             }
 
             uint8_t namecount = dr->dir$b_namecount;
             char   *namebase  = dr->dir$t_name;
-            if( namebase + namecount > end ) {
+            char   *rec_end   = (char *)dr + size + 2;
+            if( namebase + namecount > rec_end ) {
                 if( ods2_rt.debug )
                     fprintf( stderr,
                              "fuse-ods2: iterate_dir:   name overruns block (count=%u)\n",
                              (unsigned)namecount );
+                retsts = SS$_BADIRECTORY;
+                stop = 1;
                 break;
             }
             if( ods2_rt.debug )
@@ -332,7 +345,6 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
                                  && memcmp( last_name, namebase, namecount ) == 0 );
 
             char *eptr    = namebase + ((namecount + 1) & ~1);
-            char *rec_end = (char *)dr + size + 2;
             int   first   = 1;
             while( eptr + sizeof(struct dir$r_ent) <= rec_end ) {
                 struct dir$r_ent *de = (struct dir$r_ent *)eptr;
@@ -363,7 +375,7 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
         deaccesschunk( vioc, 0, 0, 1 );
     }
 
-    return SS$_NORMAL;
+    return retsts;
 }
 
 /* ------------------------------------------------------ path resolver */
@@ -412,7 +424,7 @@ vmscond_t ods2_path_to_fid( const char *path, struct fiddef *out_fid,
         return SS$_BADPARAM;
 
     /* Root and "/000000" both map to the MFD. */
-    if( strcmp( path, "/" ) == 0 ) {
+    if( strcmp( path, "/" ) == 0 || strcmp( path, "/000000" ) == 0 ) {
         out_fid->fid$w_num = FID$C_MFD;
         out_fid->fid$w_seq = FID$C_MFD;
         out_fid->fid$b_rvn = 0;
@@ -439,7 +451,10 @@ vmscond_t ods2_path_to_fid( const char *path, struct fiddef *out_fid,
 
     /* "work" now holds the dir prefix (with leading '/') or empty. */
     char vmsdir[512];
-    posix_dir_to_vms( work, vmsdir, sizeof vmsdir );
+    if( !posix_dir_to_vms( work, vmsdir, sizeof vmsdir ) ) {
+        free( work );
+        return SS$_BADFILENAME;
+    }
 
     /* Resolve directory part. */
     struct dsc_descriptor dirdsc;
