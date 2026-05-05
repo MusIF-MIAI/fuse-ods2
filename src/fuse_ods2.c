@@ -8,6 +8,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +33,7 @@ struct VCB         *ods2_vcb = NULL;
 
 /* ------------------------------------------------------ option processing */
 
-static struct {
+struct cli_opts {
     const char *image;
     const char *vol_extra;
     long long   offset;
@@ -42,20 +43,22 @@ static struct {
     int         debug;
     unsigned    uid;
     unsigned    gid;
-} cli;
+};
+
+static struct cli_opts cli;
 
 #define OPT_KEY_HELP     1
 #define OPT_KEY_VERSION  2
 
 static struct fuse_opt fuse_ods2_opts[] = {
-    { "offset=%lld",      offsetof(__typeof__(cli), offset),      0 },
-    { "vol=%s",           offsetof(__typeof__(cli), vol_extra),   0 },
-    { "uid=%u",           offsetof(__typeof__(cli), uid),         0 },
-    { "gid=%u",           offsetof(__typeof__(cli), gid),         0 },
-    { "allversions",      offsetof(__typeof__(cli), allversions), 1 },
-    { "lower",            offsetof(__typeof__(cli), lower),       1 },
-    { "textmode",         offsetof(__typeof__(cli), textmode),    1 },
-    { "debug",            offsetof(__typeof__(cli), debug),       1 },
+    { "offset=%lld",      offsetof(struct cli_opts, offset),      0 },
+    { "vol=%s",           offsetof(struct cli_opts, vol_extra),   0 },
+    { "uid=%u",           offsetof(struct cli_opts, uid),         0 },
+    { "gid=%u",           offsetof(struct cli_opts, gid),         0 },
+    { "allversions",      offsetof(struct cli_opts, allversions), 1 },
+    { "lower",            offsetof(struct cli_opts, lower),       1 },
+    { "textmode",         offsetof(struct cli_opts, textmode),    1 },
+    { "debug",            offsetof(struct cli_opts, debug),       1 },
     FUSE_OPT_KEY("-h",        OPT_KEY_HELP),
     FUSE_OPT_KEY("--help",    OPT_KEY_HELP),
     FUSE_OPT_KEY("-V",        OPT_KEY_VERSION),
