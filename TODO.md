@@ -46,16 +46,16 @@ brew install macfuse pkg-config
 - [x] Print HOME diagnostics (volume name, size, free clusters) under `-o debug`
 - [ ] Smoke: `fuse-ods2 -d image.dsk /tmp/m` mounts cleanly, mountpoint is empty until phase 2  *(pending: requires libfuse3, deferred to Linux validation)*
 
-## Phase 2 - getattr + readdir [IN PROGRESS]
-- [ ] `src/lookup.c`: convert POSIX paths (`/A/B/FILE.EXT`) to VMS strings (`[A.B]FILE.EXT;`) for `direct_dirid` + `direct(DIRECT_FIND)`
-- [ ] LRU cache (path -> FID), 1024 entries
-- [ ] `ops_getattr`: populate `struct stat` (size, blocks, mtime, ctime, mode, uid, gid)
-- [ ] VMSTIME -> `time_t` conversion (re-use `vmstime.c`)
-- [ ] `fh2$w_fileprot` -> `mode_t` (RWE per system/owner/group/world; drop D)
-- [ ] `ops_readdir`: iterate directory blocks, parse `dir$r_rec` / `dir$r_ent`
-- [ ] Latest-version filter by default; `-o allversions` exposes everything as `;n`
-- [ ] `-o lower`: lowercase the exposed names
-- [ ] Test: `ls -l /tmp/m` shows a coherent MFD
+## Phase 2 - getattr + readdir [CODE DONE, RUNTIME TBD]
+- [x] `src/lookup.c`: POSIX path -> FID via `direct_dirid` + manual dir-block scan for the file part
+- [ ] LRU cache (path -> FID), 1024 entries  *(deferred: direct_dirid already memoises directories)*
+- [x] `ods2_getattr`: populate `struct stat` (size, blocks, mtime, ctime, mode, uid, gid)
+- [x] VMSTIME -> `time_t` conversion (custom 100ns-since-1858 calc; vmstime.c kept for any future need)
+- [x] `fh2$w_fileprot` -> `mode_t` (RWE for owner/group/world; drop D, drop "system" by folding into owner)
+- [x] `ods2_readdir`: iterate directory blocks, parse `dir$r_rec` / `dir$r_ent`, handle split-record duplicates
+- [x] Latest-version filter by default; `-o allversions` exposes everything as `;n`
+- [x] `-o lower`: lowercase the exposed names
+- [ ] Test: `ls -l /tmp/m` shows a coherent MFD  *(deferred to Linux validation)*
 
 ## Phase 3 - open + read (raw)
 - [ ] `ops_open`: `accessfile`, store FCB in `fi->fh`, refuse write flags
