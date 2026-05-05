@@ -135,23 +135,13 @@ ROFS(utimens,  const char *p, const struct timespec t[2],
                struct fuse_file_info *fi)
 #undef ROFS
 
-/* Phase 3 will replace these with real implementations. */
-static int ops_open_stub( const char *path, struct fuse_file_info *fi ) {
-    (void)path; (void)fi;
-    return -ENOENT;
-}
-static int ops_read_stub( const char *path, char *buf, size_t size,
-                          off_t off, struct fuse_file_info *fi ) {
-    (void)path; (void)buf; (void)size; (void)off; (void)fi;
-    return -ENOENT;
-}
-
 static const struct fuse_operations ods2_ops = {
     .init     = ops_init,
     .getattr  = ods2_getattr,
     .readdir  = ods2_readdir,
-    .open     = ops_open_stub,
-    .read     = ops_read_stub,
+    .open     = ods2_open,
+    .read     = ods2_read,
+    .release  = ods2_release,
     .mknod    = ops_mknod,
     .mkdir    = ops_mkdir,
     .unlink   = ops_unlink,

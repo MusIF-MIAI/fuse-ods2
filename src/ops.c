@@ -7,6 +7,8 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -169,4 +171,118 @@ int ods2_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
 
     deaccessfile( dfcb );
     return $SUCCESSFUL(sts) ? 0 : -EIO;
+}
+
+/* ------------------------------------------------------ open / read / release */
+
+int ods2_open( const char *path, struct fuse_file_info *fi ) {
+    /* Read-only mount: refuse any write or O_TRUNC at the open layer
+     * before we even bother resolving the path. */
+    if( (fi->flags & O_ACCMODE) != O_RDONLY )
+        return -EROFS;
+    if( fi->flags & (O_TRUNC | O_APPEND | O_CREAT) )
+        return -EROFS;
+
+    struct fiddef fid;
+    vmscond_t     sts = ods2_path_to_fid( path, &fid, NULL );
+    if( !$SUCCESSFUL(sts) )
+        return -ENOENT;
+
+    struct FCB *fcb = NULL;
+    sts = accessfile( ods2_vcb, &fid, &fcb, 0 );
+    if( !$SUCCESSFUL(sts) ) {
+        if( ods2_rt.debug )
+            fprintf( stderr,
+                     "fuse-ods2: open('%s') accessfile failed (%08x)\n",
+                     path, (unsigned)(sts & STS$M_COND_ID) );
+        return -EIO;
+    }
+
+    if( F11LONG( fcb->head->fh2$l_filechar ) & FH2$M_DIRECTORY ) {
+        deaccessfile( fcb );
+        return -EISDIR;
+    }
+
+    fi->fh = (uint64_t)(uintptr_t)fcb;
+    fi->keep_cache = 1;
+    return 0;
+}
+
+int ods2_release( const char *path, struct fuse_file_info *fi ) {
+    (void)path;
+    struct FCB *fcb = (struct FCB *)(uintptr_t)fi->fh;
+    if( fcb != NULL )
+        deaccessfile( fcb );
+    fi->fh = 0;
+    return 0;
+}
+
+int ods2_read( const char *path, char *out, size_t size, off_t offset,
+               struct fuse_file_info *fi ) {
+    (void)path;
+
+    struct FCB *fcb = (struct FCB *)(uintptr_t)fi->fh;
+    if( fcb == NULL )
+        return -EBADF;
+
+    /* Logical end of file derived from the RECATTR.  EOF block is the
+     * first block past the last block holding data; ffb is the count
+     * of bytes used in the last block.  When efblk == 0 the file has
+     * no data at all. */
+    uint32_t efblk = F11SWAP( fcb->head->fh2$w_recattr.fat$l_efblk );
+    uint16_t ffb   = F11WORD( fcb->head->fh2$w_recattr.fat$w_ffbyte );
+    off_t    fsize = (efblk == 0) ? 0
+                                  : (off_t)(efblk - 1) * 512 + ffb;
+
+    if( offset < 0 )
+        return -EINVAL;
+    if( offset >= fsize )
+        return 0;
+    if( (off_t)size > fsize - offset )
+        size = (size_t)(fsize - offset);
+    if( size == 0 )
+        return 0;
+
+    size_t  done = 0;
+    off_t   pos  = offset;
+
+    while( done < size ) {
+        uint32_t vbn        = (uint32_t)(pos / 512) + 1;
+        uint32_t block_off  = (uint32_t)(pos % 512);
+
+        struct VIOC *vioc   = NULL;
+        char        *buf    = NULL;
+        uint32_t     blocks = 0;
+        vmscond_t    sts;
+
+        sts = accesschunk( fcb, vbn, &vioc, &buf, &blocks, 0 );
+        if( !$SUCCESSFUL(sts) ) {
+            if( ods2_rt.debug )
+                fprintf( stderr,
+                         "fuse-ods2: read accesschunk vbn=%u failed (%08x)\n",
+                         (unsigned)vbn, (unsigned)(sts & STS$M_COND_ID) );
+            return done > 0 ? (int)done : -EIO;
+        }
+        if( blocks == 0 )
+            blocks = 1;     /* defensive: should be at least 1 */
+
+        size_t avail = (size_t)blocks * 512;
+        if( avail <= block_off ) {
+            deaccesschunk( vioc, 0, 0, 1 );
+            break;
+        }
+        avail -= block_off;
+
+        size_t want = size - done;
+        size_t n    = avail < want ? avail : want;
+
+        memcpy( out + done, buf + block_off, n );
+
+        deaccesschunk( vioc, 0, 0, 1 );
+
+        done += n;
+        pos  += (off_t)n;
+    }
+
+    return (int)done;
 }

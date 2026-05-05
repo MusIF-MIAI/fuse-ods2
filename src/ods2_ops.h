@@ -17,5 +17,9 @@ int ods2_getattr( const char *path, struct stat *st,
 int ods2_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
                   off_t offset, struct fuse_file_info *fi,
                   enum fuse_readdir_flags flags );
+int ods2_open   ( const char *path, struct fuse_file_info *fi );
+int ods2_read   ( const char *path, char *buf, size_t size, off_t off,
+                  struct fuse_file_info *fi );
+int ods2_release( const char *path, struct fuse_file_info *fi );
 
 #endif /* FUSE_ODS2_OPS_H */
