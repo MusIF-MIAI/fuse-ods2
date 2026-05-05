@@ -43,19 +43,42 @@ LIB_SRCS := \
 
 LIB_OBJS := $(LIB_SRCS:%.c=$(BUILD)/%.o)
 
-APP_SRCS := \
-    src/compat_glue.c
+# Wrapper sources split by whether they pull in <fuse.h>.  The standalone
+# pieces always compile, so 'make objs' is a useful sanity check on hosts
+# without libfuse3 installed.
+NO_FUSE_SRCS := \
+    src/compat_glue.c \
+    src/phyfuse.c
 
-APP_OBJS := $(APP_SRCS:%.c=$(BUILD)/%.o)
+FUSE_SRCS := \
+    src/fuse_ods2.c
+
+NO_FUSE_OBJS := $(NO_FUSE_SRCS:%.c=$(BUILD)/%.o)
+FUSE_OBJS    := $(FUSE_SRCS:%.c=$(BUILD)/%.o)
+APP_OBJS     := $(NO_FUSE_OBJS) $(FUSE_OBJS)
 
 LIBODS2  := $(BUILD)/libods2.a
+BIN      := fuse-ods2
 
-.PHONY: all clean lib objs
-all: lib objs
+.PHONY: all clean lib objs bin
+all: bin
 
 lib: $(LIBODS2)
 
-objs: $(APP_OBJS)
+# objs builds only the FUSE-independent wrapper code so it is useful
+# even on hosts without libfuse3 installed (e.g. macOS without macFUSE).
+objs: $(NO_FUSE_OBJS)
+
+bin: $(BIN)
+
+$(BIN): $(APP_OBJS) $(LIBODS2)
+ifeq ($(strip $(FUSE_LIBS)),)
+	@echo "*** $(FUSE_PKG) not found via pkg-config; install libfuse3-dev"
+	@echo "    (or macFUSE on macOS) and re-run make."
+	@false
+else
+	$(CC) $(CFLAGS) $(FUSE_CFLAGS) -o $@ $(APP_OBJS) $(LIBODS2) $(FUSE_LIBS)
+endif
 
 $(LIBODS2): $(LIB_OBJS)
 	@mkdir -p $(dir $@)
