@@ -66,7 +66,10 @@ EXIT
 EOF
 
 rm -f "$OUT_DIR/test.dsk"
-( cd "$OUT_DIR" && yes | "$ODS2" "@build.com" )
+# A handful of 'y' answers; only one prompt is expected (INITIALIZE),
+# but we leave headroom in case future commands grow extra prompts.
+# Using printf instead of yes(1) avoids SIGPIPE/141 under pipefail.
+( cd "$OUT_DIR" && printf 'y\ny\ny\ny\ny\ny\ny\ny\n' | "$ODS2" "@build.com" )
 
 echo "made: $OUT_DIR/test.dsk"
 ls -lah "$OUT_DIR/test.dsk"
