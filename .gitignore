@@ -1,0 +1,17 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.d
+fuse-ods2
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Test images
+test/*.dsk
+test/*.img
