@@ -57,12 +57,13 @@ brew install macfuse pkg-config
 - [x] `-o lower`: lowercase the exposed names
 - [ ] Test: `ls -l /tmp/m` shows a coherent MFD  *(deferred to Linux validation)*
 
-## Phase 3 - open + read (raw)
-- [ ] `ops_open`: `accessfile`, store FCB in `fi->fh`, refuse write flags
-- [ ] `ops_read`: loop `accesschunk` from `vbn = offset/512 + 1`, splice partial first/last bytes
-- [ ] `ops_release`: `deaccessfile`
-- [ ] Honour highwater / EOF block / `fat$w_ffbyte`
-- [ ] Test: `cmp` STREAM_LF and FIX files against an ods2 extraction
+## Phase 3 - open + read (raw) [CODE DONE, RUNTIME TBD]
+- [x] `ods2_open`: `accessfile`, store FCB in `fi->fh`, refuse write flags
+- [x] `ods2_read`: loop `accesschunk` from `vbn = offset/512 + 1`, splice partial first/last bytes
+- [x] `ods2_release`: `deaccessfile`
+- [x] Honour EOF block / `fat$w_ffbyte`
+- [ ] Honour highwater (return zeros past `fcb->highwater`)  *(deferred: most images are dense)*
+- [ ] Test: `cmp` STREAM_LF and FIX files against an ods2 extraction  *(deferred to Linux validation)*
 
 ## Phase 4 - text-mode (`-o textmode`)
 - [ ] `src/recfmt.c`: streaming reader (FCB, byte_offset, len) -> "decoded" bytes
