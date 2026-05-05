@@ -145,11 +145,19 @@ ROFS(setxattr,     const char *p, const char *n, const char *v, size_t s,
 ROFS(removexattr,  const char *p, const char *n)
 ROFS(fallocate,    const char *p, int m, off_t o, off_t l,
                    struct fuse_file_info *fi)
-ROFS(copy_file_range, const char *p, struct fuse_file_info *fi_in,
-                      off_t off_in, const char *q,
-                      struct fuse_file_info *fi_out, off_t off_out,
-                      size_t len, int flags)
 #undef ROFS
+
+/* copy_file_range returns ssize_t, not int, so it can't ride the ROFS
+ * macro that other write ops use. */
+static ssize_t ops_copy_file_range( const char *p, struct fuse_file_info *fi_in,
+                                    off_t off_in, const char *q,
+                                    struct fuse_file_info *fi_out, off_t off_out,
+                                    size_t len, int flags ) {
+    (void)p; (void)fi_in; (void)off_in;
+    (void)q; (void)fi_out; (void)off_out;
+    (void)len; (void)flags;
+    return -EROFS;
+}
 
 static const struct fuse_operations ods2_ops = {
     .init        = ops_init,
