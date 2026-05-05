@@ -120,7 +120,7 @@ struct NEWFILE {
 void fid_copy( struct fiddef *dst, struct fiddef *src, unsigned rvn );
 
 vmscond_t dismount( struct VCB *vcb, options_t options);
-vmscond_t mount( options_t flags, unsigned devices, char *devnam[], char *label[] );
+vmscond_t ods2_mount( options_t flags, unsigned devices, char *devnam[], char *label[] );
 
 vmscond_t accesserase( struct VCB *vcb, struct fiddef *fid );
 vmscond_t deaccessfile( struct FCB *fcb );

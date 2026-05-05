@@ -232,7 +232,7 @@ static int do_mount( void ) {
         }
     }
 
-    sts = mount( MOU_VIRTUAL, ndev, names, labels );
+    sts = ods2_mount( MOU_VIRTUAL, ndev, names, labels );
     free( list );
     for( unsigned i = 1; i < ndev; ++i )
         free( names[i] );

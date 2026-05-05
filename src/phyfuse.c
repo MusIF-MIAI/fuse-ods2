@@ -11,7 +11,7 @@
  *   - virt_open / virt_close / virt_read / virt_write
  *   - virt_lookup (always returns NULL: no virtual-device registry)
  *   - virt_show   (no-op)
- *   - disktype[]  (a single GENERIC entry; mount() only reads geometry
+ *   - disktype[]  (a single GENERIC entry; ods2_mount() only reads geometry
  *                  to compute a HOME-search delta, which is 1 for us)
  *   - max_disktype
  *   - delta_from_index() (always 1)
@@ -40,7 +40,7 @@ extern off_t fuse_ods2_offset;
 
 /* ------------------------------------------------------------------ disktype */
 
-/* mount() iterates this table only when listing volumes; access.c does
+/* ods2_mount() iterates this table only when listing volumes; access.c does
  * not care about geometry once delta_from_index() returns.  One generic
  * entry is enough.
  */
@@ -60,7 +60,7 @@ uint32_t delta_from_index( size_t index ) {
 
 void virt_show( void ) {}
 
-/* No virtual-device registry: mount() in access.c only calls
+/* No virtual-device registry: ods2_mount() in access.c only calls
  * virt_lookup() during dismount accounting, where NULL is the right
  * answer for "this device is not a virtual disk image alias".
  */
@@ -88,7 +88,7 @@ vmscond_t virt_open( char **devname, uint32_t flags, struct DEV **retdev ) {
                                     1 /* create */, &dev )) )
         return sts;
 
-    /* The simtools mount() test for "device already mounted" reads
+    /* The simtools ods2_mount() test for "device already mounted" reads
      * dev->vcb; a freshly cached DEV may already be in the LRU from a
      * previous mount that closed.  Reset the per-mount fields.
      */

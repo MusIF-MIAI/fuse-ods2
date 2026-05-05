@@ -979,7 +979,7 @@ vmscond_t dismount (struct VCB * vcb, options_t options ) {
     return sts;
 }
 
-/******************************************************************** mount() */
+/*************************************************************** ods2_mount() */
 
 #if DEBUG
 #ifndef HOME_SKIP
@@ -997,12 +997,12 @@ vmscond_t dismount (struct VCB * vcb, options_t options ) {
 #endif
 #endif
 
-/* mount() make disk volume available for processing... */
+/* ods2_mount() make disk volume available for processing... */
 
-vmscond_t mount( options_t flags,
-                 unsigned devices,
-                 char *devnam[],
-                 char *label[] ) {
+vmscond_t ods2_mount( options_t flags,
+                      unsigned devices,
+                      char *devnam[],
+                      char *label[] ) {
     register unsigned device;
     vmscond_t sts = 0;
     struct VCB *vcb;
@@ -1071,7 +1071,7 @@ vmscond_t mount( options_t flags,
                     break;
                 hom = &vcbdev->home;
 #if DEBUG || defined( HOME_LOG )
-                printf( "--->mount(%u): LBA=%u, HM2$L_HOMELBN=%u, "
+                printf( "--->ods2_mount(%u): LBA=%u, HM2$L_HOMELBN=%u, "
                         "HM2$L_ALHOMELBN=%u, "
                         "HM2$T_FORMAT=\"%12.12s\", memcmp()=%d,%d\n",
                         homtry+1, hba, F11LONG( hom->hm2$l_homelbn ),
@@ -1101,7 +1101,7 @@ vmscond_t mount( options_t flags,
                 errcnt++;
                 sts = MOUNT_HOMBLKCHK;
 #if DEBUG || defined( HOME_LOG )
-                printf( "--->mount(): Home block validation failure\n" );
+                printf( "--->ods2_mount(): Home block validation failure\n" );
                 printf( "(F11LONG(hom->hm2$l_alhomelbn) != 0) %u\n", (F11LONG(hom->hm2$l_alhomelbn) != 0) );
                 printf( "(F11LONG(hom->hm2$l_altidxlbn) != 0) %u\n", (F11LONG(hom->hm2$l_altidxlbn) != 0) );
                 printf( "(F11WORD(hom->hm2$w_homevbn)   != 0) %u\n", (F11WORD(hom->hm2$w_homevbn)   != 0));
