@@ -233,9 +233,12 @@ int main( int argc, char *argv[] ) {
     if( fuse_opt_parse( &args, &cli, fuse_ods2_opts, opt_proc ) == -1 )
         return 1;
 
-    /* Force read-only at the kernel level too. */
-    fuse_opt_add_arg( &args, "-oro" );
-    fuse_opt_add_arg( &args, "-odefault_permissions" );
+    /* Read-only is enforced inside every write op (-EROFS).  We do
+     * NOT inject -oro / -odefault_permissions into the libfuse arg
+     * vector here: some kernel/libfuse3 combos return EPERM on the
+     * first /dev/fuse read when these options are duplicated in the
+     * command line.  The kernel-side "ro" flag, if the user wants it,
+     * can still be passed via -o ro on the CLI. */
 
     /* Decide whether uid/gid were really set: parse argv heuristically
      * since fuse_opt always writes the field even for the default. */
