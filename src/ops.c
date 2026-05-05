@@ -143,6 +143,11 @@ static int readdir_cb( const char *name, int namelen, int version,
                ods2_rt.allversions, ods2_rt.lower,
                display, sizeof display );
 
+    if( ods2_rt.debug )
+        fprintf( stderr,
+                 "fuse-ods2: readdir entry: '%.*s';%d -> '%s'\n",
+                 namelen, name, version, display );
+
     memset( &st, 0, sizeof st );
     st.st_ino = ods2_fid_to_inode( fid );
     /* We don't know if it's a directory without reading the HEAD; let
@@ -165,16 +170,51 @@ int ods2_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
     vmscond_t     sts;
 
     sts = ods2_path_to_fid( path, &fid, NULL );
-    if( !$SUCCESSFUL(sts) )
+    if( !$SUCCESSFUL(sts) ) {
+        if( ods2_rt.debug )
+            fprintf( stderr,
+                     "fuse-ods2: readdir('%s') path_to_fid failed (%08x)\n",
+                     path, (unsigned)(sts & STS$M_COND_ID) );
         return -ENOENT;
+    }
+
+    if( ods2_rt.debug )
+        fprintf( stderr,
+                 "fuse-ods2: readdir('%s') fid=(%u,%u,%u,%u)\n",
+                 path,
+                 (unsigned)F11WORD(fid.fid$w_num),
+                 (unsigned)F11WORD(fid.fid$w_seq),
+                 (unsigned)fid.fid$b_rvn,
+                 (unsigned)fid.fid$b_nmx );
 
     struct FCB *dfcb = NULL;
     sts = accessfile( ods2_vcb, &fid, &dfcb, 0 );
-    if( !$SUCCESSFUL(sts) )
+    if( !$SUCCESSFUL(sts) ) {
+        if( ods2_rt.debug )
+            fprintf( stderr,
+                     "fuse-ods2: readdir accessfile failed (%08x)\n",
+                     (unsigned)(sts & STS$M_COND_ID) );
         return -EIO;
+    }
+
+    if( ods2_rt.debug ) {
+        struct HEAD *h = dfcb->head;
+        fprintf( stderr,
+                 "fuse-ods2: readdir filechar=%08x efblk=%u hiblk=%u ffb=%u "
+                 "rtype=0x%02x rattr=0x%02x\n",
+                 (unsigned)F11LONG(h->fh2$l_filechar),
+                 (unsigned)F11SWAP(h->fh2$w_recattr.fat$l_efblk),
+                 (unsigned)F11SWAP(h->fh2$w_recattr.fat$l_hiblk),
+                 (unsigned)F11WORD(h->fh2$w_recattr.fat$w_ffbyte),
+                 (unsigned)h->fh2$w_recattr.fat$b_rtype,
+                 (unsigned)h->fh2$w_recattr.fat$b_rattrib );
+    }
 
     /* Reject non-directories. */
     if( !(F11LONG( dfcb->head->fh2$l_filechar ) & FH2$M_DIRECTORY) ) {
+        if( ods2_rt.debug )
+            fprintf( stderr,
+                     "fuse-ods2: readdir: target is not a directory\n" );
         deaccessfile( dfcb );
         return -ENOTDIR;
     }
@@ -187,6 +227,11 @@ int ods2_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
     sts = ods2_iterate_dir( dfcb,
                             ods2_rt.allversions ? 0 : 1,
                             readdir_cb, &ctx );
+
+    if( ods2_rt.debug )
+        fprintf( stderr,
+                 "fuse-ods2: readdir iterate done sts=%08x\n",
+                 (unsigned)(sts & STS$M_COND_ID) );
 
     deaccessfile( dfcb );
     return $SUCCESSFUL(sts) ? 0 : -EIO;

@@ -229,6 +229,10 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
 
     uint32_t efblk = F11SWAP( dir_fcb->head->fh2$w_recattr.fat$l_efblk );
     uint16_t ffb   = F11WORD( dir_fcb->head->fh2$w_recattr.fat$w_ffbyte );
+    if( ods2_rt.debug )
+        fprintf( stderr,
+                 "fuse-ods2: iterate_dir efblk=%u ffb=%u latest_only=%d\n",
+                 (unsigned)efblk, (unsigned)ffb, latest_only );
     if( efblk == 0 )
         return SS$_NORMAL;
     if( ffb == 0 )
@@ -257,23 +261,52 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
 
         char *p   = buf;
         char *end = buf + BLOCKSIZE;
+        if( ods2_rt.debug )
+            fprintf( stderr,
+                     "fuse-ods2: iterate_dir: block %u loaded blocks=%u\n",
+                     (unsigned)blk, (unsigned)blocks );
 
         while( p + sizeof(struct dir$r_rec) <= end ) {
             struct dir$r_rec *dr = (struct dir$r_rec *)p;
             uint16_t size = F11WORD( dr->dir$w_size );
 
             /* End-of-block sentinel: 0xffff. */
-            if( size == 0xffff )
+            if( size == 0xffff ) {
+                if( ods2_rt.debug )
+                    fprintf( stderr,
+                             "fuse-ods2: iterate_dir:   end-of-block at offs=%ld\n",
+                             (long)(p - buf) );
                 break;
-            if( size + 2 > BLOCKSIZE )
+            }
+            if( size + 2 > BLOCKSIZE ) {
+                if( ods2_rt.debug )
+                    fprintf( stderr,
+                             "fuse-ods2: iterate_dir:   record size=%u too big at offs=%ld\n",
+                             (unsigned)size, (long)(p - buf) );
                 break;
-            if( p + size + 2 > end )
+            }
+            if( p + size + 2 > end ) {
+                if( ods2_rt.debug )
+                    fprintf( stderr,
+                             "fuse-ods2: iterate_dir:   record overruns block at offs=%ld size=%u\n",
+                             (long)(p - buf), (unsigned)size );
                 break;
+            }
 
             uint8_t namecount = dr->dir$b_namecount;
             char   *namebase  = dr->dir$t_name;
-            if( namebase + namecount > end )
+            if( namebase + namecount > end ) {
+                if( ods2_rt.debug )
+                    fprintf( stderr,
+                             "fuse-ods2: iterate_dir:   name overruns block (count=%u)\n",
+                             (unsigned)namecount );
                 break;
+            }
+            if( ods2_rt.debug )
+                fprintf( stderr,
+                         "fuse-ods2: iterate_dir:   record offs=%ld size=%u namecount=%u name='%.*s'\n",
+                         (long)(p - buf), (unsigned)size,
+                         (unsigned)namecount, namecount, namebase );
 
             /* Skip a record whose name we already emitted (split). */
             int same_as_last = ( latest_only
