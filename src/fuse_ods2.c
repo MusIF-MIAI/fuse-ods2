@@ -19,6 +19,7 @@
 #include "recfmt.h"
 
 #include "access.h"
+#include "device.h"
 #include "f11def.h"
 #include "ods2.h"
 #include "ssdef.h"
@@ -197,20 +198,44 @@ static int do_mount( void ) {
     char *names[16] = { 0 };
     char *labels[16] = { 0 };
     unsigned ndev = 0;
+    char *list = NULL;
     vmscond_t sts;
 
     names[ndev++] = (char *)cli.image;
 
     if( cli.vol_extra != NULL ) {
-        char *list = strdup( cli.vol_extra );
         char *tok, *save = NULL;
+        list = strdup( cli.vol_extra );
+        if( list == NULL ) {
+            fprintf( stderr, "fuse-ods2: out of memory parsing volume list\n" );
+            return -1;
+        }
         for( tok = strtok_r( list, ",", &save );
-             tok != NULL && ndev < (sizeof names / sizeof names[0]);
-             tok = strtok_r( NULL, ",", &save ) )
+             tok != NULL;
+             tok = strtok_r( NULL, ",", &save ) ) {
+            if( ndev >= (sizeof names / sizeof names[0]) ) {
+                fprintf( stderr, "fuse-ods2: too many volumes in set (max %zu)\n",
+                         sizeof names / sizeof names[0] );
+                free( list );
+                for( unsigned i = 1; i < ndev; ++i )
+                    free( names[i] );
+                return -1;
+            }
             names[ndev++] = strdup( tok );
+            if( names[ndev - 1] == NULL ) {
+                fprintf( stderr, "fuse-ods2: out of memory parsing volume list\n" );
+                free( list );
+                for( unsigned i = 1; i + 1 < ndev; ++i )
+                    free( names[i] );
+                return -1;
+            }
+        }
     }
 
     sts = mount( MOU_VIRTUAL, ndev, names, labels );
+    free( list );
+    for( unsigned i = 1; i < ndev; ++i )
+        free( names[i] );
     if( !$SUCCESSFUL(sts) ) {
         fprintf( stderr,
                  "fuse-ods2: mount failed: ods2-status=0x%08x\n",
@@ -271,6 +296,10 @@ int main( int argc, char *argv[] ) {
 
     if( cli.image == NULL ) {
         usage( argv[0] );
+        return 1;
+    }
+    if( cli.offset < 0 ) {
+        fprintf( stderr, "fuse-ods2: offset must be non-negative\n" );
         return 1;
     }
 

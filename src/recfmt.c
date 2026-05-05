@@ -230,7 +230,7 @@ static int decode_full( struct FCB *fcb, struct dynbuf *out ) {
             /* If FAB$M_BLK and body would span boundary, the file is
              * malformed in textmode terms; fall back to truncating at
              * the boundary. */
-            if( blk_rec && (body_off / BLOCKSIZE) !=
+            if( blk_rec && body_len > 0 && (body_off / BLOCKSIZE) !=
                 ((body_off + body_len - 1) / BLOCKSIZE) ) {
                 /* leave body_len as is; raw_read will gracefully give
                  * what it can. */

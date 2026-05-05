@@ -203,17 +203,33 @@ static void posix_dir_to_vms( const char *posix, char *out, size_t outlen ) {
  * version is given, *version is set to 0 (caller treats as "highest").
  * The buffer is assumed to be a writable copy of the file component.
  */
-static void parse_file_version( char *namebuf, int *version ) {
+static int parse_file_version( char *namebuf, int *version ) {
     char *semi = strchr( namebuf, ';' );
     if( semi == NULL ) {
         *version = 0;
-        return;
+        return 1;
     }
     *semi = '\0';
-    if( semi[1] == '\0' )
+    if( semi[1] == '\0' ) {
         *version = 0;
-    else
-        *version = atoi( semi + 1 );
+        return 1;
+    }
+
+    unsigned v = 0;
+    for( char *p = semi + 1; *p != '\0'; ++p ) {
+        if( !isdigit( (unsigned char)*p ) )
+            return 0;
+        v = v * 10u + (unsigned)(*p - '0');
+        if( v > 65535u )
+            return 0;
+    }
+    *version = (int)v;
+    return 1;
+}
+
+static int name_has_dir_suffix( const char *name ) {
+    size_t len = strlen( name );
+    return len >= 4 && memcmp( name + len - 4, ".DIR", 4 ) == 0;
 }
 
 /* ------------------------------------------------------ directory walk */
@@ -456,11 +472,14 @@ vmscond_t ods2_path_to_fid( const char *path, struct fiddef *out_fid,
     upper_inplace( namebuf );
 
     int want_version;
-    parse_file_version( namebuf, &want_version );
+    if( !parse_file_version( namebuf, &want_version ) ) {
+        free( work );
+        return SS$_BADFILENAME;
+    }
 
-    /* Strip the optional ".DIR" recognition: when the filename ends in
-     * ".DIR" or ".DIR;n", this is a directory entry, but we still look
-     * it up as a regular dir entry name.  No special handling needed.
+    /* POSIX callers naturally ask for "/SUBDIR", while ODS-2 stores
+     * that directory file as "SUBDIR.DIR;1".  First try the literal
+     * component, then fall back to the directory-file spelling below.
      */
 
     struct FCB *dfcb = NULL;
@@ -478,6 +497,20 @@ vmscond_t ods2_path_to_fid( const char *path, struct fiddef *out_fid,
     sts = ods2_iterate_dir( dfcb, 0 /* visit every version */,
                             namematch_cb, &m );
 
+    if( $SUCCESSFUL(sts) && !m.found && !name_has_dir_suffix( namebuf ) ) {
+        size_t namelen = strlen( namebuf );
+        if( namelen + 4 < sizeof namebuf ) {
+            memcpy( namebuf + namelen, ".DIR", 5 );
+            memset( &m, 0, sizeof m );
+            m.want         = namebuf;
+            m.want_len     = (int)strlen( namebuf );
+            m.want_version = want_version;
+
+            sts = ods2_iterate_dir( dfcb, 0 /* visit every version */,
+                                    namematch_cb, &m );
+        }
+    }
+
     deaccessfile( dfcb );
     free( work );
 
@@ -492,8 +525,7 @@ vmscond_t ods2_path_to_fid( const char *path, struct fiddef *out_fid,
         /* Cheap test: ".DIR" suffix.  ops_getattr does the real test
          * by reading the HEAD; this hint is only used by callers who
          * want to short-circuit. */
-        size_t nl = strlen( namebuf );
-        *out_is_dir = (nl >= 4 && memcmp( namebuf + nl - 4, ".DIR", 4 ) == 0);
+        *out_is_dir = name_has_dir_suffix( namebuf );
     }
     return SS$_NORMAL;
 }

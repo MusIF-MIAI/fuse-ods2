@@ -104,31 +104,34 @@ struct readdir_ctx {
     fuse_fill_dir_t        filler;
 };
 
-static void emit_name( const char *raw, int rawlen, int version,
+static int has_dir_suffix( const char *raw, int rawlen ) {
+    return rawlen > 4 && memcmp( raw + rawlen - 4, ".DIR", 4 ) == 0;
+}
+
+static void emit_name( const char *raw, int rawlen, int version, int is_dir,
                        int allversions, int lower, char *out, size_t outlen ) {
     /* "raw" is uppercase on disk, NOT NUL-terminated. */
     size_t i = 0;
     int    has_dot = 0;
-    int    has_ver = 0;
     /* Strip a trailing ";<digits>" if it accidentally appears in the
      * raw name -- on disk the directory record name is just "FOO.BAR"
      * but be defensive. */
     int eff = rawlen;
     for( int k = 0; k < rawlen; ++k )
         if( raw[k] == ';' ) { eff = k; break; }
+    if( is_dir && has_dir_suffix( raw, eff ) )
+        eff -= 4;
 
     for( int k = 0; k < eff && i + 1 < outlen; ++k ) {
         unsigned char c = (unsigned char)raw[k];
         if( c == '.' ) has_dot = 1;
         out[i++] = lower ? (char)tolower(c) : (char)c;
     }
-    if( !has_dot && i + 1 < outlen )
+    if( !is_dir && !has_dot && i + 1 < outlen )
         out[i++] = '.';                 /* canonical "NAME." form */
 
-    if( allversions && i + 16 < outlen ) {
+    if( !is_dir && allversions && i + 16 < outlen ) {
         i += (size_t)snprintf( out + i, outlen - i, ";%d", version );
-        has_ver = 1;
-        (void)has_ver;
     }
     out[i] = '\0';
 }
@@ -138,8 +141,18 @@ static int readdir_cb( const char *name, int namelen, int version,
     struct readdir_ctx *r = ctx;
     char display[80];
     struct stat st;
+    int is_dir = 0;
 
-    emit_name( name, namelen, version,
+    struct VIOC *vioc = NULL;
+    struct HEAD *head = NULL;
+    uint32_t idx = 0;
+    if( $SUCCESSFUL( accesshead( ods2_vcb, (struct fiddef *)fid, 0,
+                                 &vioc, &head, &idx, 0 ) ) ) {
+        is_dir = (F11LONG( head->fh2$l_filechar ) & FH2$M_DIRECTORY) != 0;
+        deaccesshead( vioc, NULL, 0 );
+    }
+
+    emit_name( name, namelen, version, is_dir,
                ods2_rt.allversions, ods2_rt.lower,
                display, sizeof display );
 
@@ -150,15 +163,12 @@ static int readdir_cb( const char *name, int namelen, int version,
 
     memset( &st, 0, sizeof st );
     st.st_ino = ods2_fid_to_inode( fid );
-    /* We don't know if it's a directory without reading the HEAD; let
-     * the kernel call getattr for that.  But hint a "regular file"
-     * type by default so 'ls -l' doesn't issue a stat for every entry
-     * just to learn the type.  Directories will get fixed by getattr.
+    /* Hint the file type when HEAD lookup succeeds so common directory
+     * walkers do not need an immediate getattr just to identify dirs.
      */
-    st.st_mode = S_IFREG;
+    st.st_mode = is_dir ? S_IFDIR : S_IFREG;
 
-    r->filler( r->buf, display, &st, 0, 0 );
-    return 0;
+    return r->filler( r->buf, display, &st, 0, 0 );
 }
 
 int ods2_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
