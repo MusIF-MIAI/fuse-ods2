@@ -125,43 +125,58 @@ static void *ops_init( struct fuse_conn_info *conn,
 }
 
 #define ROFS(name, ...) static int ops_##name(__VA_ARGS__) { return -EROFS; }
-ROFS(mknod,    const char *p, mode_t m, dev_t d)
-ROFS(mkdir,    const char *p, mode_t m)
-ROFS(unlink,   const char *p)
-ROFS(rmdir,    const char *p)
-ROFS(symlink,  const char *t, const char *l)
-ROFS(rename,   const char *f, const char *t, unsigned int flags)
-ROFS(link,     const char *f, const char *t)
-ROFS(chmod,    const char *p, mode_t m, struct fuse_file_info *fi)
-ROFS(chown,    const char *p, uid_t u, gid_t g, struct fuse_file_info *fi)
-ROFS(truncate, const char *p, off_t s, struct fuse_file_info *fi)
-ROFS(write,    const char *p, const char *b, size_t s, off_t o,
-               struct fuse_file_info *fi)
-ROFS(create,   const char *p, mode_t m, struct fuse_file_info *fi)
-ROFS(utimens,  const char *p, const struct timespec t[2],
-               struct fuse_file_info *fi)
+ROFS(mknod,        const char *p, mode_t m, dev_t d)
+ROFS(mkdir,        const char *p, mode_t m)
+ROFS(unlink,       const char *p)
+ROFS(rmdir,        const char *p)
+ROFS(symlink,      const char *t, const char *l)
+ROFS(rename,       const char *f, const char *t, unsigned int flags)
+ROFS(link,         const char *f, const char *t)
+ROFS(chmod,        const char *p, mode_t m, struct fuse_file_info *fi)
+ROFS(chown,        const char *p, uid_t u, gid_t g, struct fuse_file_info *fi)
+ROFS(truncate,     const char *p, off_t s, struct fuse_file_info *fi)
+ROFS(write,        const char *p, const char *b, size_t s, off_t o,
+                   struct fuse_file_info *fi)
+ROFS(create,       const char *p, mode_t m, struct fuse_file_info *fi)
+ROFS(utimens,      const char *p, const struct timespec t[2],
+                   struct fuse_file_info *fi)
+ROFS(setxattr,     const char *p, const char *n, const char *v, size_t s,
+                   int f)
+ROFS(removexattr,  const char *p, const char *n)
+ROFS(fallocate,    const char *p, int m, off_t o, off_t l,
+                   struct fuse_file_info *fi)
+ROFS(copy_file_range, const char *p, struct fuse_file_info *fi_in,
+                      off_t off_in, const char *q,
+                      struct fuse_file_info *fi_out, off_t off_out,
+                      size_t len, int flags)
 #undef ROFS
 
 static const struct fuse_operations ods2_ops = {
-    .init     = ops_init,
-    .getattr  = ods2_getattr,
-    .readdir  = ods2_readdir,
-    .open     = ods2_open,
-    .read     = ods2_read,
-    .release  = ods2_release,
-    .mknod    = ops_mknod,
-    .mkdir    = ops_mkdir,
-    .unlink   = ops_unlink,
-    .rmdir    = ops_rmdir,
-    .symlink  = ops_symlink,
-    .rename   = ops_rename,
-    .link     = ops_link,
-    .chmod    = ops_chmod,
-    .chown    = ops_chown,
-    .truncate = ops_truncate,
-    .write    = ops_write,
-    .create   = ops_create,
-    .utimens  = ops_utimens,
+    .init        = ops_init,
+    .getattr     = ods2_getattr,
+    .readdir     = ods2_readdir,
+    .open        = ods2_open,
+    .read        = ods2_read,
+    .release     = ods2_release,
+    .statfs      = ods2_statfs,
+    .readlink    = ods2_readlink,
+    .mknod       = ops_mknod,
+    .mkdir       = ops_mkdir,
+    .unlink      = ops_unlink,
+    .rmdir       = ops_rmdir,
+    .symlink     = ops_symlink,
+    .rename      = ops_rename,
+    .link        = ops_link,
+    .chmod       = ops_chmod,
+    .chown       = ops_chown,
+    .truncate    = ops_truncate,
+    .write       = ops_write,
+    .create      = ops_create,
+    .utimens     = ops_utimens,
+    .setxattr    = ops_setxattr,
+    .removexattr = ops_removexattr,
+    .fallocate   = ops_fallocate,
+    .copy_file_range = ops_copy_file_range,
 };
 
 /* ------------------------------------------------------ mount lifecycle */

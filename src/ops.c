@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 #include "ods2_ops.h"
@@ -368,4 +369,46 @@ int ods2_read( const char *path, char *out, size_t size, off_t offset,
     }
 
     return (int)done;
+}
+
+/* ------------------------------------------------------ statfs / readlink */
+
+int ods2_statfs( const char *path, struct statvfs *st ) {
+    (void)path;
+    if( ods2_vcb == NULL || ods2_vcb->devices == 0 )
+        return -ENXIO;
+
+    /* Sum block counts across the volume set.  ODS-2 cluster size and
+     * device size live in the home block of each VCBDEV; total blocks
+     * is the device size in 512-byte units.  Free blocks would need
+     * the storage bitmap (write-side accounting) so we report 0. */
+    fsblkcnt_t total_blocks = 0;
+    unsigned   cluster_blocks = 0;
+
+    for( unsigned i = 0; i < ods2_vcb->devices; ++i ) {
+        const struct VCBDEV *d = &ods2_vcb->vcbdev[i];
+        unsigned c = (unsigned)F11WORD( d->home.hm2$w_cluster );
+        if( c == 0 ) c = 1;
+        if( cluster_blocks == 0 ) cluster_blocks = c;
+        if( d->dev != NULL )
+            total_blocks += (fsblkcnt_t)( d->dev->eofptr / 512 );
+    }
+    if( cluster_blocks == 0 ) cluster_blocks = 1;
+
+    memset( st, 0, sizeof *st );
+    st->f_bsize   = 512;
+    st->f_frsize  = 512;
+    st->f_blocks  = total_blocks;
+    st->f_bfree   = 0;          /* read-only mount; bitmap not parsed */
+    st->f_bavail  = 0;
+    st->f_files   = 0;
+    st->f_ffree   = 0;
+    st->f_namemax = 80;         /* VMS file spec including version    */
+    return 0;
+}
+
+int ods2_readlink( const char *path, char *buf, size_t size ) {
+    (void)path; (void)buf; (void)size;
+    /* ODS-2 has no symbolic links. */
+    return -EINVAL;
 }

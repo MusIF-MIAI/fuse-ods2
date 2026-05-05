@@ -21,5 +21,7 @@ int ods2_open   ( const char *path, struct fuse_file_info *fi );
 int ods2_read   ( const char *path, char *buf, size_t size, off_t off,
                   struct fuse_file_info *fi );
 int ods2_release( const char *path, struct fuse_file_info *fi );
+int ods2_statfs ( const char *path, struct statvfs *st );
+int ods2_readlink( const char *path, char *buf, size_t size );
 
 #endif /* FUSE_ODS2_OPS_H */

@@ -64,8 +64,15 @@ fusermount3 -u /tmp/m
 | `-o debug`          | Verbose diagnostics on stderr                                     |
 | `-s`                | Single-threaded (recommended at this stage)                       |
 
-The filesystem is always mounted read-only; any write attempt returns
-`EROFS`.
+The filesystem is always mounted read-only at the operation layer:
+every `mknod` / `mkdir` / `unlink` / `write` / `chmod` / `setxattr` /
+`fallocate` / ... returns `EROFS`.  If you also want the kernel-level
+`ro` flag (so even root sees `Read-only file system`), pass `-o ro` on
+the command line.
+
+`statfs` reports the volume's total block count derived from the
+home-block cluster size and image size.  Free-block accounting needs
+the storage bitmap (a write-side concern) and is reported as zero.
 
 ## Project layout
 

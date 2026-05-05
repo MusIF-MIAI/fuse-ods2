@@ -72,18 +72,18 @@ brew install macfuse pkg-config
 - [x] Cache cleared on dismount
 - [ ] Test on `.LIS` / `.TXT` files in VAR format  *(deferred to phase 7 e2e)*
 
-## Phase 5 - offset + volume set
-- [ ] `-o offset=N`: implemented in phyfuse, exposed on the CLI
-- [ ] `-o vol=path1,path2,...`: pass `devices[]` to `mount()` for multi-RVN volumes
-- [ ] Offset test: prepend an MBR (`cat mbr raw > padded`) and verify mount with offset
-- [ ] Volume set test if such an image can be generated upstream
+## Phase 5 - offset + volume set [CODE DONE, RUNTIME TBD]
+- [x] `-o offset=N`: implemented in phyfuse, exposed on the CLI
+- [x] `-o vol=path1,path2,...`: pass `devices[]` to `ods2_mount()` for multi-RVN volumes (with bounded list, leak-free parser)
+- [ ] Offset test: prepend an MBR (`cat mbr raw > padded`) and verify mount with offset  *(deferred to Linux)*
+- [ ] Volume set test if such an image can be generated upstream  *(deferred to Linux)*
 
-## Phase 6 - hardening
-- [ ] Global mutex around mount/dismount/access (re-enable multithreaded FUSE later)
-- [ ] Clean dismount on SIGINT/SIGTERM
-- [ ] Sensible `statfs` (block size, total/free blocks)
-- [ ] `readlink` -> `ENOSYS` (ODS-2 has no symlinks)
-- [ ] Every write op returns `EROFS` (`mknod`, `mkdir`, `unlink`, `rmdir`, `symlink`, `rename`, `link`, `chmod`, `chown`, `truncate`, `write`, `setxattr`, `removexattr`, `create`, `utimens`, `fallocate`)
+## Phase 6 - hardening [MOSTLY DONE]
+- [ ] Global mutex around ods2_mount/dismount/access (re-enable multithreaded FUSE later)  *(MVP runs single-threaded per -s)*
+- [x] Clean dismount on SIGINT/SIGTERM (fuse_main breaks the loop; do_dismount runs after)
+- [x] Sensible `statfs` (block size, total blocks; free blocks pinned to 0 for RO)
+- [x] `readlink` -> `EINVAL` (ODS-2 has no symlinks)
+- [x] Every write op returns `EROFS` (`mknod`, `mkdir`, `unlink`, `rmdir`, `symlink`, `rename`, `link`, `chmod`, `chown`, `truncate`, `write`, `setxattr`, `removexattr`, `create`, `utimens`, `fallocate`, `copy_file_range`)
 
 ## Phase 7 - tests and CI
 - [ ] `test/make_image.sh`: produce a reproducible image (STREAM_LF, FIX, VAR files; nested dirs; multiple versions)
