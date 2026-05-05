@@ -7,6 +7,11 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  # Opt JS-based actions into Node.js 24 ahead of the default flip
+  # (Node 20 is being deprecated on GitHub-hosted runners).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   debian:
     runs-on: ubuntu-latest
