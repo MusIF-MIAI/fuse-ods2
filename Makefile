@@ -48,11 +48,11 @@ LIB_OBJS := $(LIB_SRCS:%.c=$(BUILD)/%.o)
 # without libfuse3 installed.
 NO_FUSE_SRCS := \
     src/compat_glue.c \
-    src/phyfuse.c
+    src/phyfuse.c     \
+    src/lookup.c
 
 FUSE_SRCS := \
-    src/fuse_ods2.c \
-    src/lookup.c    \
+    src/fuse_ods2.c   \
     src/ops.c
 
 NO_FUSE_OBJS := $(NO_FUSE_SRCS:%.c=$(BUILD)/%.o)

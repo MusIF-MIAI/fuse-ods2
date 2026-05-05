@@ -26,7 +26,7 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#include "ods2_ops.h"
+#include "ods2_lookup.h"
 
 #include "access.h"
 #include "descrip.h"
@@ -236,7 +236,16 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
     if( efblk == 0 )
         return SS$_NORMAL;
 
-    for( uint32_t blk = 1; blk <= efblk; ++blk ) {
+    /* In latest_only mode we want one filler() call per filename.
+     * Names are sorted across records, but a single filename can be
+     * split across consecutive records when version count exceeds the
+     * record budget (search_ent in ods2lib has the same caveat).  We
+     * remember the last emitted name to skip the second piece. */
+    char last_name[128];
+    int  last_name_len = -1;
+    int  stop = 0;
+
+    for( uint32_t blk = 1; blk <= efblk && !stop; ++blk ) {
         struct VIOC *vioc = NULL;
         char        *buf  = NULL;
         uint32_t     blocks = 0;
@@ -256,9 +265,6 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
             /* End-of-block sentinel: 0xffff. */
             if( size == 0xffff )
                 break;
-            /* Sanity: size points one record forward; size+2 is the
-             * advance.  Anything past the block end means corruption.
-             */
             if( size + 2 > BLOCKSIZE )
                 break;
             if( p + size + 2 > end )
@@ -269,25 +275,39 @@ vmscond_t ods2_iterate_dir( struct FCB *dir_fcb, int latest_only,
             if( namebase + namecount > end )
                 break;
 
-            /* Entries follow the name, padded to a word boundary. */
-            char *eptr = namebase + ((namecount + 1) & ~1);
+            /* Skip a record whose name we already emitted (split). */
+            int same_as_last = ( latest_only
+                                 && last_name_len == namecount
+                                 && namecount > 0
+                                 && (size_t)namecount <= sizeof last_name
+                                 && memcmp( last_name, namebase, namecount ) == 0 );
+
+            char *eptr    = namebase + ((namecount + 1) & ~1);
             char *rec_end = (char *)dr + size + 2;
-            int   first_ver = 1;
+            int   first   = 1;
             while( eptr + sizeof(struct dir$r_ent) <= rec_end ) {
                 struct dir$r_ent *de = (struct dir$r_ent *)eptr;
                 int version = (int)F11WORD( de->dir$w_version );
 
-                if( !latest_only || first_ver ) {
+                int emit = !latest_only || (first && !same_as_last);
+                if( emit ) {
                     if( cb( namebase, namecount, version, &de->dir$w_fid, ctx )
                         != 0 ) {
-                        deaccesschunk( vioc, 0, 0, 1 );
-                        return SS$_NORMAL;       /* caller asked stop */
+                        stop = 1;
+                        break;
                     }
                 }
-                first_ver = 0;
+                first = 0;
                 eptr += sizeof(struct dir$r_ent);
             }
 
+            if( namecount > 0 && (size_t)namecount <= sizeof last_name ) {
+                memcpy( last_name, namebase, namecount );
+                last_name_len = namecount;
+            }
+
+            if( stop )
+                break;
             p += size + 2;
         }
 
