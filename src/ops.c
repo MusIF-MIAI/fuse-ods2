@@ -20,6 +20,7 @@
 #include "recfmt.h"
 
 #include "access.h"
+#include "device.h"
 #include "f11def.h"
 #include "ods2.h"
 #include "ssdef.h"
