@@ -43,6 +43,8 @@ struct cli_opts {
     int         lower;
     int         textmode;
     int         debug;
+    int         help;
+    int         version;
     unsigned    uid;
     unsigned    gid;
 };
@@ -101,11 +103,11 @@ static int opt_proc( void *data, const char *arg, int key,
             return 1;
         case OPT_KEY_HELP:
             usage( outargs->argv[0] );
-            fuse_opt_add_arg( outargs, "-ho" );
+            cli.help = 1;
             return 0;
         case OPT_KEY_VERSION:
             fprintf( stderr, "fuse-ods2 0.1\n" );
-            fuse_opt_add_arg( outargs, "--version" );
+            cli.version = 1;
             return 0;
         default:
             return 1;
@@ -265,6 +267,10 @@ int main( int argc, char *argv[] ) {
 
     if( fuse_opt_parse( &args, &cli, fuse_ods2_opts, opt_proc ) == -1 )
         return 1;
+    if( cli.help || cli.version ) {
+        fuse_opt_free_args( &args );
+        return 0;
+    }
 
     /* Read-only is enforced inside every write op (-EROFS).  We do
      * NOT inject -oro / -odefault_permissions into the libfuse arg
