@@ -51,7 +51,9 @@ NO_FUSE_SRCS := \
     src/phyfuse.c
 
 FUSE_SRCS := \
-    src/fuse_ods2.c
+    src/fuse_ods2.c \
+    src/lookup.c    \
+    src/ops.c
 
 NO_FUSE_OBJS := $(NO_FUSE_SRCS:%.c=$(BUILD)/%.o)
 FUSE_OBJS    := $(FUSE_SRCS:%.c=$(BUILD)/%.o)

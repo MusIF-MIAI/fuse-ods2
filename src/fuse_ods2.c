@@ -1,14 +1,10 @@
 /*
  * fuse_ods2.c - entry point and FUSE wiring.
  *
- * In this Phase-1 milestone the program parses its command line,
- * mounts an ODS-2 volume through ods2lib, prints the volume header
- * under -o debug, and registers a stub set of FUSE operations.  The
- * filesystem mount succeeds but the namespace is empty; getattr,
- * readdir and friends are filled in by the next phase.
+ * Parses the command line, mounts an ODS-2 volume through ods2lib,
+ * registers the FUSE operation table (implemented in ops.c) and
+ * tears the mount down on exit.
  */
-
-#define FUSE_USE_VERSION 31
 
 #include <errno.h>
 #include <fcntl.h>
@@ -18,7 +14,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <fuse.h>
+#include "ods2_ops.h"
 
 #include "access.h"
 #include "f11def.h"
@@ -26,41 +22,40 @@
 #include "ssdef.h"
 #include "stsdef.h"
 
-/* ------------------------------------------------------ global mount state */
+/* ------------------------------------------------------ globals */
 
 int   fuse_ods2_debug  = 0;
 off_t fuse_ods2_offset = 0;
 
+struct ods2_runtime ods2_rt;
+struct VCB         *ods2_vcb = NULL;
+
+/* ------------------------------------------------------ option processing */
+
 static struct {
-    const char *image;          /* primary image path                   */
-    const char *vol_extra;      /* comma-separated extra volumes (RVN>1)*/
-    long long   offset;         /* byte offset into the image           */
+    const char *image;
+    const char *vol_extra;
+    long long   offset;
     int         allversions;
     int         lower;
     int         textmode;
     int         debug;
-    int         force_uid;      /* 1 if uid was supplied                 */
-    uid_t       uid;
-    int         force_gid;
-    gid_t       gid;
-} opts;
-
-static struct VCB *g_vcb = NULL;
-
-/* ------------------------------------------------------ option processing */
+    unsigned    uid;
+    unsigned    gid;
+} cli;
 
 #define OPT_KEY_HELP     1
 #define OPT_KEY_VERSION  2
 
 static struct fuse_opt fuse_ods2_opts[] = {
-    { "offset=%lld",      offsetof(__typeof__(opts), offset),      0 },
-    { "vol=%s",           offsetof(__typeof__(opts), vol_extra),   0 },
-    { "uid=%u",           offsetof(__typeof__(opts), uid),         0 },
-    { "gid=%u",           offsetof(__typeof__(opts), gid),         0 },
-    { "allversions",      offsetof(__typeof__(opts), allversions), 1 },
-    { "lower",            offsetof(__typeof__(opts), lower),       1 },
-    { "textmode",         offsetof(__typeof__(opts), textmode),    1 },
-    { "debug",            offsetof(__typeof__(opts), debug),       1 },
+    { "offset=%lld",      offsetof(__typeof__(cli), offset),      0 },
+    { "vol=%s",           offsetof(__typeof__(cli), vol_extra),   0 },
+    { "uid=%u",           offsetof(__typeof__(cli), uid),         0 },
+    { "gid=%u",           offsetof(__typeof__(cli), gid),         0 },
+    { "allversions",      offsetof(__typeof__(cli), allversions), 1 },
+    { "lower",            offsetof(__typeof__(cli), lower),       1 },
+    { "textmode",         offsetof(__typeof__(cli), textmode),    1 },
+    { "debug",            offsetof(__typeof__(cli), debug),       1 },
     FUSE_OPT_KEY("-h",        OPT_KEY_HELP),
     FUSE_OPT_KEY("--help",    OPT_KEY_HELP),
     FUSE_OPT_KEY("-V",        OPT_KEY_VERSION),
@@ -94,11 +89,11 @@ static int opt_proc( void *data, const char *arg, int key,
     (void)data;
     switch( key ) {
         case FUSE_OPT_KEY_NONOPT:
-            if( opts.image == NULL ) {
-                opts.image = strdup( arg );
-                return 0;       /* swallow */
+            if( cli.image == NULL ) {
+                cli.image = strdup( arg );
+                return 0;
             }
-            return 1;           /* keep mountpoint for libfuse */
+            return 1;
         case OPT_KEY_HELP:
             usage( outargs->argv[0] );
             fuse_opt_add_arg( outargs, "-ho" );
@@ -112,7 +107,7 @@ static int opt_proc( void *data, const char *arg, int key,
     }
 }
 
-/* ------------------------------------------------------ FUSE operations */
+/* ------------------------------------------------------ FUSE table */
 
 static void *ops_init( struct fuse_conn_info *conn,
                        struct fuse_config *cfg ) {
@@ -122,66 +117,41 @@ static void *ops_init( struct fuse_conn_info *conn,
     return NULL;
 }
 
-static int ops_getattr( const char *path, struct stat *st,
-                        struct fuse_file_info *fi ) {
-    (void)fi;
-    memset( st, 0, sizeof *st );
-    if( strcmp( path, "/" ) == 0 ) {
-        st->st_mode  = S_IFDIR | 0555;
-        st->st_nlink = 2;
-        st->st_uid   = opts.force_uid ? opts.uid : getuid();
-        st->st_gid   = opts.force_gid ? opts.gid : getgid();
-        return 0;
-    }
-    return -ENOENT;
-}
+#define ROFS(name, ...) static int ops_##name(__VA_ARGS__) { return -EROFS; }
+ROFS(mknod,    const char *p, mode_t m, dev_t d)
+ROFS(mkdir,    const char *p, mode_t m)
+ROFS(unlink,   const char *p)
+ROFS(rmdir,    const char *p)
+ROFS(symlink,  const char *t, const char *l)
+ROFS(rename,   const char *f, const char *t, unsigned int flags)
+ROFS(link,     const char *f, const char *t)
+ROFS(chmod,    const char *p, mode_t m, struct fuse_file_info *fi)
+ROFS(chown,    const char *p, uid_t u, gid_t g, struct fuse_file_info *fi)
+ROFS(truncate, const char *p, off_t s, struct fuse_file_info *fi)
+ROFS(write,    const char *p, const char *b, size_t s, off_t o,
+               struct fuse_file_info *fi)
+ROFS(create,   const char *p, mode_t m, struct fuse_file_info *fi)
+ROFS(utimens,  const char *p, const struct timespec t[2],
+               struct fuse_file_info *fi)
+#undef ROFS
 
-static int ops_readdir( const char *path, void *buf, fuse_fill_dir_t filler,
-                        off_t offset, struct fuse_file_info *fi,
-                        enum fuse_readdir_flags flags ) {
-    (void)offset; (void)fi; (void)flags;
-    if( strcmp( path, "/" ) != 0 )
-        return -ENOENT;
-    filler( buf, ".",  NULL, 0, 0 );
-    filler( buf, "..", NULL, 0, 0 );
-    return 0;
-}
-
-static int ops_open( const char *path, struct fuse_file_info *fi ) {
+/* Phase 3 will replace these with real implementations. */
+static int ops_open_stub( const char *path, struct fuse_file_info *fi ) {
     (void)path; (void)fi;
     return -ENOENT;
 }
-
-static int ops_read( const char *path, char *buf, size_t size, off_t off,
-                     struct fuse_file_info *fi ) {
+static int ops_read_stub( const char *path, char *buf, size_t size,
+                          off_t off, struct fuse_file_info *fi ) {
     (void)path; (void)buf; (void)size; (void)off; (void)fi;
     return -ENOENT;
 }
 
-#define ROFS(name, ...) static int ops_##name(__VA_ARGS__) { return -EROFS; }
-ROFS(mknod,   const char *p, mode_t m, dev_t d)
-ROFS(mkdir,   const char *p, mode_t m)
-ROFS(unlink,  const char *p)
-ROFS(rmdir,   const char *p)
-ROFS(symlink, const char *t, const char *l)
-ROFS(rename,  const char *f, const char *t, unsigned int flags)
-ROFS(link,    const char *f, const char *t)
-ROFS(chmod,   const char *p, mode_t m, struct fuse_file_info *fi)
-ROFS(chown,   const char *p, uid_t u, gid_t g, struct fuse_file_info *fi)
-ROFS(truncate, const char *p, off_t s, struct fuse_file_info *fi)
-ROFS(write,   const char *p, const char *b, size_t s, off_t o,
-              struct fuse_file_info *fi)
-ROFS(create,  const char *p, mode_t m, struct fuse_file_info *fi)
-ROFS(utimens, const char *p, const struct timespec t[2],
-              struct fuse_file_info *fi)
-#undef ROFS
-
 static const struct fuse_operations ods2_ops = {
     .init     = ops_init,
-    .getattr  = ops_getattr,
-    .readdir  = ops_readdir,
-    .open     = ops_open,
-    .read     = ops_read,
+    .getattr  = ods2_getattr,
+    .readdir  = ods2_readdir,
+    .open     = ops_open_stub,
+    .read     = ops_read_stub,
     .mknod    = ops_mknod,
     .mkdir    = ops_mkdir,
     .unlink   = ops_unlink,
@@ -205,7 +175,6 @@ static void log_home( const struct VCB *vcb ) {
 
     memcpy( volname, d->home.hm2$t_volname, 12 );
     volname[12] = '\0';
-    /* Trim trailing spaces. */
     for( int i = 11; i >= 0 && volname[i] == ' '; --i )
         volname[i] = '\0';
 
@@ -228,17 +197,15 @@ static int do_mount( void ) {
     unsigned ndev = 0;
     vmscond_t sts;
 
-    names[ndev++] = (char *)opts.image;
+    names[ndev++] = (char *)cli.image;
 
-    if( opts.vol_extra != NULL ) {
-        char *list = strdup( opts.vol_extra );
+    if( cli.vol_extra != NULL ) {
+        char *list = strdup( cli.vol_extra );
         char *tok, *save = NULL;
         for( tok = strtok_r( list, ",", &save );
              tok != NULL && ndev < (sizeof names / sizeof names[0]);
              tok = strtok_r( NULL, ",", &save ) )
             names[ndev++] = strdup( tok );
-        /* leak list/strings until exit; the strings are owned by
-         * device_lookup() entries past mount() success. */
     }
 
     sts = mount( MOU_VIRTUAL, ndev, names, labels );
@@ -249,16 +216,16 @@ static int do_mount( void ) {
         return -1;
     }
 
-    g_vcb = vcb_list;
-    if( opts.debug && g_vcb != NULL )
-        log_home( g_vcb );
+    ods2_vcb = vcb_list;
+    if( cli.debug && ods2_vcb != NULL )
+        log_home( ods2_vcb );
     return 0;
 }
 
 static void do_dismount( void ) {
-    if( g_vcb != NULL ) {
-        dismount( g_vcb, 0 );
-        g_vcb = NULL;
+    if( ods2_vcb != NULL ) {
+        dismount( ods2_vcb, 0 );
+        ods2_vcb = NULL;
     }
 }
 
@@ -268,28 +235,35 @@ int main( int argc, char *argv[] ) {
     struct fuse_args args = FUSE_ARGS_INIT( argc, argv );
     int ret;
 
-    if( fuse_opt_parse( &args, &opts, fuse_ods2_opts, opt_proc ) == -1 )
+    if( fuse_opt_parse( &args, &cli, fuse_ods2_opts, opt_proc ) == -1 )
         return 1;
 
     /* Force read-only at the kernel level too. */
     fuse_opt_add_arg( &args, "-oro" );
     fuse_opt_add_arg( &args, "-odefault_permissions" );
 
-    /* Propagate to backend statics. */
-    fuse_ods2_debug  = opts.debug;
-    fuse_ods2_offset = (off_t)opts.offset;
-
-    /* Track whether the user really set uid/gid: fuse_opt sets the
-     * field regardless, but the default of 0 is meaningful (root), so
-     * we infer "set" from whether the option string was seen by parsing
-     * argv ourselves.  Cheap heuristic: scan the original argv.
-     */
+    /* Decide whether uid/gid were really set: parse argv heuristically
+     * since fuse_opt always writes the field even for the default. */
+    int seen_uid = 0, seen_gid = 0;
     for( int i = 0; i < argc; ++i ) {
-        if( strstr( argv[i], "uid=" ) ) opts.force_uid = 1;
-        if( strstr( argv[i], "gid=" ) ) opts.force_gid = 1;
+        if( strstr( argv[i], "uid=" ) ) seen_uid = 1;
+        if( strstr( argv[i], "gid=" ) ) seen_gid = 1;
     }
 
-    if( opts.image == NULL ) {
+    /* Push parsed options into the runtime struct that ops.c reads. */
+    ods2_rt.allversions = cli.allversions;
+    ods2_rt.lower       = cli.lower;
+    ods2_rt.textmode    = cli.textmode;
+    ods2_rt.debug       = cli.debug;
+    ods2_rt.force_uid   = seen_uid;
+    ods2_rt.force_gid   = seen_gid;
+    ods2_rt.uid         = (uid_t)cli.uid;
+    ods2_rt.gid         = (gid_t)cli.gid;
+
+    fuse_ods2_debug  = cli.debug;
+    fuse_ods2_offset = (off_t)cli.offset;
+
+    if( cli.image == NULL ) {
         usage( argv[0] );
         return 1;
     }

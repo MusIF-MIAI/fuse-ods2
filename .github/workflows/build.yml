@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libfuse3-dev fuse3
+
+      - name: Show toolchain
+        run: |
+          cc --version
+          pkg-config --modversion fuse3
+          uname -a
+
+      - name: Build library
+        run: make lib
+
+      - name: Build helper objects (FUSE-independent)
+        run: make objs
+
+      - name: Build full binary
+        run: make bin
+
+      - name: Smoke - help
+        run: ./fuse-ods2 -h || true
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuse-ods2-linux
+          path: fuse-ods2
+          if-no-files-found: error
