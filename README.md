@@ -29,12 +29,23 @@ CI builds on `debian:stable`.  Fedora / Arch users want
 ### macOS (best-effort)
 
 ```sh
-brew install macfuse pkg-config
+brew install --cask macfuse
+brew install pkg-config
 make
 ```
 
-macFUSE requires user approval the first time the kernel extension is
-loaded.
+The Makefile detects Darwin and resolves `pkg-config fuse3` if macFUSE
+exposes that name, or falls back to `pkg-config fuse`.
+
+Caveats on macOS:
+
+- macFUSE installs a kernel extension that requires user approval in
+  *System Settings -> Privacy & Security* the first time it loads.
+- File ownership: macFUSE refuses to expose a mount to anyone other
+  than the mounter unless you pass `-o allow_other` (and macFUSE has
+  it enabled).
+- Linux remains the primary tested platform; the upstream ods2 build
+  used by the smoke test is not exercised in CI on macOS.
 
 ## Usage
 

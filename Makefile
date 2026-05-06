@@ -22,10 +22,13 @@ ifeq ($(UNAME_S),Linux)
     FUSE_PKG := fuse3
 endif
 ifeq ($(UNAME_S),Darwin)
-    # macFUSE ships a libfuse-compatible API.  Prefer fuse3 if available,
-    # fall back to fuse (libfuse2-style) otherwise.
+    # macFUSE ships a libfuse-compatible API.  Prefer fuse3 if it is
+    # registered with pkg-config (recent macFUSE), otherwise fall back
+    # to the libfuse2-style 'fuse' package.
     FUSE_PKG := $(shell pkg-config --exists fuse3 && echo fuse3 || echo fuse)
-    DEFS    += -D_DARWIN_C_SOURCE
+    # _DARWIN_C_SOURCE is the libc feature switch on macOS; do NOT
+    # define _DEFAULT_SOURCE here, that's a glibc-only knob.
+    DEFS    := $(filter-out -D_DEFAULT_SOURCE,$(DEFS)) -D_DARWIN_C_SOURCE
 endif
 
 FUSE_PKG ?= fuse3

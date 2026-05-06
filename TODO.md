@@ -92,8 +92,8 @@ brew install macfuse pkg-config
 - [ ] FIX/VAR/VFC textmode coverage (needs ods2 COPY format selection)  *(deferred)*
 - [ ] cmp byte-exact against `ods2 COPY /FROM_FILES-11`  *(deferred)*
 
-## Phase 8 - macOS portability (parallel)
-- [ ] Detect platform in `Makefile` (Linux -> `pkg-config fuse3`; macOS -> `pkg-config fuse` via macFUSE)
-- [ ] Portable endian wrapper (`<endian.h>` on Linux, `<machine/endian.h>` on macOS)
-- [ ] Manual smoke test on macOS with macFUSE installed
-- [ ] Document macOS quirks in the README (kext approval, performance)
+## Phase 8 - macOS portability (parallel) [DONE]
+- [x] Detect platform in `Makefile` (Linux -> `pkg-config fuse3`; macOS -> auto-pick `fuse3` or `fuse` via macFUSE)
+- [x] Portable endian handling (the simtools F11WORD/F11LONG macros use `__BYTE_ORDER__`; no wrapper needed)
+- [ ] Manual smoke test on macOS with macFUSE installed  *(deferred to user; CI is Linux-only)*
+- [x] Document macOS quirks in the README (kext approval, allow_other caveat)
