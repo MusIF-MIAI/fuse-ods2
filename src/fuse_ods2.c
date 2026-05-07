@@ -8,6 +8,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,15 @@ off_t fuse_ods2_offset = 0;
 
 struct ods2_runtime ods2_rt;
 struct VCB         *ods2_vcb = NULL;
+
+/* ods2lib (access.c, direct.c, cache.c, ...) keeps shared state in
+ * globals -- vcb_list, the file-header cache, the per-FCB window list.
+ * libfuse3 dispatches each operation on a worker thread by default, so
+ * we serialise every entry point that touches that state through one
+ * coarse mutex.  Read/write ops are not the hot path of an archival
+ * tool, and a single lock keeps the simtools code paths exactly as
+ * they were exercised in the original single-threaded ods2 binary. */
+static pthread_mutex_t ods2_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* ------------------------------------------------------ option processing */
 
@@ -83,7 +93,8 @@ static void usage( const char *prog ) {
         "  -o uid=N           force a specific uid on every file\n"
         "  -o gid=N           force a specific gid on every file\n"
         "  -o debug           verbose diagnostics on stderr\n"
-        "  -s                 single-threaded (always enabled)\n"
+        "  -s                 single-threaded (multithread is the default;\n"
+        "                     a global mutex serialises ods2lib calls)\n"
         "  -f                 foreground (do not daemonize)\n"
         "  -d                 same as -odebug + -f\n"
         "\n"
@@ -159,14 +170,62 @@ static ssize_t ops_copy_file_range( const char *p, struct fuse_file_info *fi_in,
     return -EROFS;
 }
 
+/* Read-side ops have to take ods2_lock before touching ods2lib state. */
+
+static int locked_getattr( const char *p, struct stat *st,
+                           struct fuse_file_info *fi ) {
+    pthread_mutex_lock( &ods2_lock );
+    int r = ods2_getattr( p, st, fi );
+    pthread_mutex_unlock( &ods2_lock );
+    return r;
+}
+
+static int locked_readdir( const char *p, void *buf, fuse_fill_dir_t filler,
+                           off_t offset, struct fuse_file_info *fi,
+                           enum fuse_readdir_flags flags ) {
+    pthread_mutex_lock( &ods2_lock );
+    int r = ods2_readdir( p, buf, filler, offset, fi, flags );
+    pthread_mutex_unlock( &ods2_lock );
+    return r;
+}
+
+static int locked_open( const char *p, struct fuse_file_info *fi ) {
+    pthread_mutex_lock( &ods2_lock );
+    int r = ods2_open( p, fi );
+    pthread_mutex_unlock( &ods2_lock );
+    return r;
+}
+
+static int locked_read( const char *p, char *buf, size_t size, off_t offset,
+                        struct fuse_file_info *fi ) {
+    pthread_mutex_lock( &ods2_lock );
+    int r = ods2_read( p, buf, size, offset, fi );
+    pthread_mutex_unlock( &ods2_lock );
+    return r;
+}
+
+static int locked_release( const char *p, struct fuse_file_info *fi ) {
+    pthread_mutex_lock( &ods2_lock );
+    int r = ods2_release( p, fi );
+    pthread_mutex_unlock( &ods2_lock );
+    return r;
+}
+
+static int locked_statfs( const char *p, struct statvfs *st ) {
+    pthread_mutex_lock( &ods2_lock );
+    int r = ods2_statfs( p, st );
+    pthread_mutex_unlock( &ods2_lock );
+    return r;
+}
+
 static const struct fuse_operations ods2_ops = {
     .init        = ops_init,
-    .getattr     = ods2_getattr,
-    .readdir     = ods2_readdir,
-    .open        = ods2_open,
-    .read        = ods2_read,
-    .release     = ods2_release,
-    .statfs      = ods2_statfs,
+    .getattr     = locked_getattr,
+    .readdir     = locked_readdir,
+    .open        = locked_open,
+    .read        = locked_read,
+    .release     = locked_release,
+    .statfs      = locked_statfs,
     .readlink    = ods2_readlink,
     .mknod       = ops_mknod,
     .mkdir       = ops_mkdir,
@@ -294,10 +353,10 @@ int main( int argc, char *argv[] ) {
         fuse_opt_free_args( &args );
         return 0;
     }
-    if( fuse_opt_add_arg( &args, "-s" ) == -1 ) {
-        fuse_opt_free_args( &args );
-        return 1;
-    }
+
+    /* Multithread is the default now: ods2lib globals are serialised
+     * by a single coarse mutex around every read-side op.  The user
+     * can still pass -s if they want single-threaded for debugging. */
 
     /* Read-only is enforced inside every write op (-EROFS).  We do
      * NOT inject -oro / -odefault_permissions into the libfuse arg

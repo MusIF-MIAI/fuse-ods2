@@ -78,8 +78,8 @@ brew install macfuse pkg-config
 - [ ] Offset test: prepend an MBR (`cat mbr raw > padded`) and verify mount with offset  *(deferred to Linux)*
 - [ ] Volume set test if such an image can be generated upstream  *(deferred to Linux)*
 
-## Phase 6 - hardening [MOSTLY DONE]
-- [ ] Global mutex around ods2_mount/dismount/access (re-enable multithreaded FUSE later)  *(MVP runs single-threaded per -s)*
+## Phase 6 - hardening [DONE]
+- [x] Global mutex around ods2lib read paths so libfuse3 can dispatch multithread (default); `-s` still honoured for debugging
 - [x] Clean dismount on SIGINT/SIGTERM (fuse_main breaks the loop; do_dismount runs after)
 - [x] Sensible `statfs` (block size, total blocks; free blocks pinned to 0 for RO)
 - [x] `readlink` -> `EINVAL` (ODS-2 has no symlinks)
@@ -95,5 +95,6 @@ brew install macfuse pkg-config
 ## Phase 8 - macOS portability (parallel) [DONE]
 - [x] Detect platform in `Makefile` (Linux -> `pkg-config fuse3`; macOS -> auto-pick `fuse3` or `fuse` via macFUSE)
 - [x] Portable endian handling (the simtools F11WORD/F11LONG macros use `__BYTE_ORDER__`; no wrapper needed)
-- [ ] Manual smoke test on macOS with macFUSE installed  *(deferred to user; CI is Linux-only)*
+- [x] CI builds the macOS binary (macos-latest runner, macFUSE cask) and ships it as an artifact
+- [ ] Manual mount/smoke test on macOS  *(deferred to user; the CI kext can't be loaded on hosted runners)*
 - [x] Document macOS quirks in the README (kext approval, allow_other caveat)

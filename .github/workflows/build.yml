@@ -83,3 +83,46 @@ jobs:
           ls -la test/_out || true
           ./fuse-ods2 -h || true
           dmesg | tail -50 || true
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install build dependencies (macFUSE)
+        # macFUSE ships the libfuse-compatible headers and pkg-config
+        # metadata that the Makefile picks up via 'pkg-config fuse'
+        # (or 'fuse3' on recent macFUSE).  The kext does not need to be
+        # loaded just to compile and link.
+        run: |
+          brew update
+          brew install pkg-config
+          brew install --cask macfuse
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          cc --version
+          uname -a
+          pkg-config --modversion fuse3 2>/dev/null \
+            || pkg-config --modversion fuse 2>/dev/null \
+            || echo "no fuse pkg-config (will fail at link)"
+
+      - name: Build library
+        run: make lib
+
+      - name: Build helper objects (FUSE-independent)
+        run: make objs
+
+      - name: Build full binary
+        run: make bin
+
+      - name: Smoke - help
+        run: ./fuse-ods2 -h || true
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuse-ods2-macos
+          path: fuse-ods2
+          if-no-files-found: error
