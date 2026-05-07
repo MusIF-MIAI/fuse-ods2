@@ -89,15 +89,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install build dependencies (macFUSE)
-        # macFUSE ships the libfuse-compatible headers and pkg-config
-        # metadata that the Makefile picks up via 'pkg-config fuse'
-        # (or 'fuse3' on recent macFUSE).  The kext does not need to be
-        # loaded just to compile and link.
+      - name: Install build dependencies (fuse-t)
+        # fuse-t is a kext-less FUSE implementation for macOS that is
+        # ABI-compatible with libfuse3.  macFUSE 5 ships libfuse3
+        # headers too but with darwin-extended structs (fuse_darwin_attr,
+        # divergent setxattr signature) that don't match upstream
+        # libfuse3, so we use fuse-t instead -- it lets the same
+        # ods2_ops.h that compiles on Linux compile here unchanged.
         run: |
           brew update
           brew install pkg-config
-          brew install --cask macfuse
+          brew tap macos-fuse-t/homebrew-cask
+          brew install --cask fuse-t
 
       - name: Show toolchain
         run: |

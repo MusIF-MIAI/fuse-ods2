@@ -32,7 +32,12 @@ if [ ! -x "$OUT_DIR/ods2" ]; then
     (
         cd "$SIM_DIR/extracters/ods2"
         ln -sf makefile.unix Makefile
-        make -j"$(nproc 2>/dev/null || echo 2)"
+        # The upstream Makefile races between compiling genmsg and
+        # then immediately invoking it as a build tool: under -j the
+        # final cc -o genmsg can still be open for write while make
+        # tries to exec ./genmsg, giving "Text file busy".  Build
+        # serially: one extra second on a tiny project, no flakes.
+        make -j1
     )
     cp "$SIM_DIR/extracters/ods2/ods2"   "$OUT_DIR/ods2"
     # ods2 looks up its help / message catalogues next to the binary.
