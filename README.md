@@ -85,6 +85,26 @@ the command line.
 home-block cluster size and image size.  Free-block accounting needs
 the storage bitmap (a write-side concern) and is reported as zero.
 
+## `catvms` — decoding extracted record files
+
+VMS text files are usually stored as RMS records, not as a flat byte
+stream.  `fuse-ods2 -o textmode` decodes them on the fly while the
+volume is mounted, but if you have already copied a file out in raw
+mode (the default), `catvms` does the same job offline:
+
+```sh
+catvms file.txt              # autodetect, falls back to VAR
+catvms --var      < f.txt    # force VAR (length-prefixed records)
+catvms --vfc=2    f.lis      # VFC, 2-byte fixed control header
+catvms --fix=80   card.dat   # FIX records, 80 bytes each
+catvms --stmlf    f.txt      # already a stream, pass through
+catvms --stmcr    f.mac      # CR-delimited stream, translate to LF
+catvms --no-lf    --var f    # do not append LF after each record
+```
+
+`catvms` has no library dependencies; build it via `make` (or
+`make catvms`) along with `fuse-ods2`.
+
 ## Project layout
 
 ```

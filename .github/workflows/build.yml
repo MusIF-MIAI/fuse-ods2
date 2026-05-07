@@ -34,17 +34,21 @@ jobs:
       - name: Build helper objects (FUSE-independent)
         run: make objs
 
-      - name: Build full binary
-        run: make bin
+      - name: Build full binary + catvms
+        run: make all
 
       - name: Smoke - help
-        run: ./fuse-ods2 -h || true
+        run: |
+          ./fuse-ods2 -h || true
+          ./catvms --help
 
-      - name: Upload binary
+      - name: Upload binaries
         uses: actions/upload-artifact@v7
         with:
           name: fuse-ods2-debian
-          path: fuse-ods2
+          path: |
+            fuse-ods2
+            catvms
           if-no-files-found: error
 
   e2e:
@@ -68,8 +72,8 @@ jobs:
 
       - uses: actions/checkout@v5
 
-      - name: Build fuse-ods2
-        run: make bin
+      - name: Build fuse-ods2 + catvms
+        run: make all
 
       - name: Generate ODS-2 test image
         run: ./test/make_image.sh
@@ -117,15 +121,19 @@ jobs:
       - name: Build helper objects (FUSE-independent)
         run: make objs
 
-      - name: Build full binary
-        run: make bin
+      - name: Build full binary + catvms
+        run: make all
 
       - name: Smoke - help
-        run: ./fuse-ods2 -h || true
+        run: |
+          ./fuse-ods2 -h || true
+          ./catvms --help
 
-      - name: Upload binary
+      - name: Upload binaries
         uses: actions/upload-artifact@v7
         with:
           name: fuse-ods2-macos
-          path: fuse-ods2
+          path: |
+            fuse-ods2
+            catvms
           if-no-files-found: error

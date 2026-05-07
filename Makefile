@@ -67,9 +67,14 @@ APP_OBJS     := $(NO_FUSE_OBJS) $(FUSE_OBJS)
 
 LIBODS2  := $(BUILD)/libods2.a
 BIN      := fuse-ods2
+CATVMS   := catvms
+
+# catvms is a self-contained CLI: no libfuse, no ods2lib, just stdlib.
+CATVMS_SRCS := src/catvms.c
+CATVMS_OBJS := $(CATVMS_SRCS:%.c=$(BUILD)/%.o)
 
 .PHONY: all clean lib objs bin
-all: bin
+all: $(BIN) $(CATVMS)
 
 lib: $(LIBODS2)
 
@@ -88,6 +93,9 @@ else
 	$(CC) $(CFLAGS) $(FUSE_CFLAGS) -o $@ $(APP_OBJS) $(LIBODS2) $(FUSE_LIBS)
 endif
 
+$(CATVMS): $(CATVMS_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(CATVMS_OBJS)
+
 $(LIBODS2): $(LIB_OBJS)
 	@mkdir -p $(dir $@)
 	$(AR) rcs $@ $(LIB_OBJS)
@@ -98,6 +106,6 @@ $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) $(FUSE_CFLAGS) -MMD -MP -c $< -o $@
 
 clean:
-	rm -rf $(BUILD) fuse-ods2
+	rm -rf $(BUILD) fuse-ods2 catvms
 
--include $(LIB_OBJS:.o=.d) $(APP_OBJS:.o=.d)
+-include $(LIB_OBJS:.o=.d) $(APP_OBJS:.o=.d) $(CATVMS_OBJS:.o=.d)

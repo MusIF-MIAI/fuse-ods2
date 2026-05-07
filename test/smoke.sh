@@ -19,6 +19,12 @@ if [ ! -x "$BIN" ]; then
     exit 2
 fi
 
+CATVMS="${CATVMS:-$ROOT/catvms}"
+if [ ! -x "$CATVMS" ]; then
+    echo "smoke: catvms binary '$CATVMS' is missing - run 'make all' first" >&2
+    exit 2
+fi
+
 cleanup() {
     fusermount3 -u "$MNT" 2>/dev/null || true
     rmdir "$MNT" 2>/dev/null || true
@@ -88,5 +94,38 @@ nvers="$(printf '%s\n' "$versions" | grep -c . || true)"
 [ "$nvers" -ge 3 ] \
     || fail "expected >=3 versions of HELLO.TXT under -o allversions, got: '$versions'"
 ok "-o allversions exposes $nvers versions of HELLO.TXT"
+
+# ---- catvms vs fuse -o textmode ---------------------------------------
+# Pull HELLO.TXT off the mount in raw (default) mode, decode it with
+# catvms, and compare the result to what fuse-ods2 -o textmode produces
+# on the same file.  Both pipelines must agree byte for byte.
+fusermount3 -u "$MNT"
+wait "$FPID" || true
+
+raw="$(mktemp)"
+text_fuse="$(mktemp)"
+text_catvms="$(mktemp)"
+trap 'fusermount3 -u "$MNT" 2>/dev/null || true; rmdir "$MNT" 2>/dev/null || true; rm -f "$raw" "$text_fuse" "$text_catvms"' EXIT
+
+"$BIN" -s "$IMG" "$MNT"
+for _ in 1 2 3 4 5; do
+    if mountpoint -q "$MNT"; then break; fi
+    sleep 0.2
+done
+cp "$MNT/HELLO.TXT" "$raw"
+fusermount3 -u "$MNT"
+
+"$BIN" -s -o textmode "$IMG" "$MNT"
+for _ in 1 2 3 4 5; do
+    if mountpoint -q "$MNT"; then break; fi
+    sleep 0.2
+done
+cp "$MNT/HELLO.TXT" "$text_fuse"
+fusermount3 -u "$MNT"
+
+"$CATVMS" "$raw" > "$text_catvms"
+cmp "$text_fuse" "$text_catvms" \
+    || fail "catvms output disagrees with fuse-ods2 -o textmode for HELLO.TXT"
+ok "catvms agrees with fuse-ods2 -o textmode on HELLO.TXT"
 
 echo "smoke: PASSED"

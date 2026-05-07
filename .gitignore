@@ -4,6 +4,7 @@ build/
 *.a
 *.d
 fuse-ods2
+catvms
 
 # Editor / OS
 .DS_Store
