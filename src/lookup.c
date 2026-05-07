@@ -68,17 +68,21 @@ time_t ods2_vmstime_to_time_t( const VMSTIME t ) {
 /* ------------------------------------------------------ inode mapping */
 
 ino_t ods2_fid_to_inode( const struct fiddef *fid ) {
-    /* Pack FID into a 64-bit inode.  Layout, low to high:
-     *   16 bits fid$w_num  | 16 bits fid$w_seq | 8 bits fid$b_rvn
-     * | 8 bits fid$b_nmx   | 16 bits reserved
-     * The FID fields are stored little-endian on disk; we read them
-     * via F11WORD() so they're in host byte order here.
+    /* What a VMS user expects to see is the file number (the first
+     * element of the (num,seq,rvn) tuple printed by DIR/FILE_ID), so
+     * INDEXF.SYS comes out as inode 1, BITMAP.SYS as 2, the MFD as 4
+     * and so on.  fid$b_nmx extends fid$w_num to 24 bits on volumes
+     * with more than 65535 file headers.
+     *
+     * For a single-volume read-only mount that's already a unique
+     * inode: the sequence number can only change after the slot is
+     * freed and reused, which can't happen while we're mounted.  RVN
+     * is folded in for safety on volume sets so file 1 of RVN 1 and
+     * file 1 of RVN 2 don't collide.
      */
-    uint64_t v = 0;
-    v |= (uint64_t)F11WORD(fid->fid$w_num);
-    v |= (uint64_t)F11WORD(fid->fid$w_seq) << 16;
-    v |= (uint64_t)fid->fid$b_rvn          << 32;
-    v |= (uint64_t)fid->fid$b_nmx          << 40;
+    uint64_t file_no = ((uint64_t)fid->fid$b_nmx << 16)
+                     | F11WORD(fid->fid$w_num);
+    uint64_t v = file_no | ((uint64_t)fid->fid$b_rvn << 24);
     if( v == 0 )
         v = 1;          /* 0 is reserved by some POSIX tools */
     return (ino_t)v;
