@@ -226,10 +226,10 @@ static enum mode autodetect( const uint8_t *data, size_t len ) {
 
 static void usage( FILE *fp, const char *prog ) {
     fprintf( fp,
-        "usage: %s [options] [file]\n"
+        "usage: %s [options] [file ...]\n"
         "\n"
-        "Decode a VMS RMS record-formatted file to plain text.\n"
-        "Reads from stdin if no file is given.\n"
+        "Decode VMS RMS record-formatted files to plain text and concatenate\n"
+        "the results, like cat(1).  Reads stdin if no file is given.\n"
         "\n"
         "options:\n"
         "  --auto         autodetect record format (default)\n"
@@ -252,10 +252,61 @@ static int parse_int_arg( const char *s, int *out ) {
     return 0;
 }
 
+/* Decode 'len' bytes from 'data' according to 'o' into stdout.  Returns
+ * 0 on success, -1 on I/O error.  Format autodetection is per-input so
+ * a mixed batch (some VAR, some stream) can still be cat'd in one go. */
+static int decode_one( const struct opts *o, const uint8_t *data, size_t len ) {
+    enum mode m = o->mode;
+    if( m == MODE_AUTO )
+        m = autodetect( data, len );
+
+    int add_lf = !o->no_lf;
+    switch( m ) {
+    case MODE_VAR:   return decode_var( data, len, 0, add_lf );
+    case MODE_VFC:   return decode_var( data, len, o->vfc_size, add_lf );
+    case MODE_FIX:   return decode_fix( data, len, (size_t)o->fix_size, add_lf );
+    case MODE_STMLF: return decode_stmlf( data, len );
+    case MODE_STMCR: return decode_stmcr( data, len );
+    case MODE_AUTO:  return decode_stmlf( data, len );  /* unreachable */
+    }
+    return 0;
+}
+
+static int run_one( const struct opts *o, const char *path ) {
+    FILE *in = stdin;
+    if( path != NULL ) {
+        in = fopen( path, "rb" );
+        if( in == NULL ) {
+            fprintf( stderr, "catvms: %s: %s\n", path, strerror( errno ) );
+            return -1;
+        }
+    }
+
+    uint8_t *data = NULL;
+    size_t   len  = 0;
+    int      rc   = 0;
+    if( slurp( in, &data, &len ) < 0 ) {
+        fprintf( stderr, "catvms: %s: read failed: %s\n",
+                 path ? path : "<stdin>", strerror( errno ) );
+        rc = -1;
+    } else {
+        rc = decode_one( o, data, len );
+    }
+
+    free( data );
+    if( in != stdin ) fclose( in );
+    return rc;
+}
+
 int main( int argc, char *argv[] ) {
     struct opts o = { .mode = MODE_AUTO, .vfc_size = 0, .fix_size = 0,
                       .no_lf = 0 };
-    const char *path = NULL;
+
+    /* Two-pass argv walk: first pull out options, then iterate file
+     * arguments in order.  This keeps multi-file invocations like
+     * 'catvms MAIL.MAI MAIL$*.MAI' obvious without forcing a "--" terminator. */
+    int   nfiles = 0;
+    char *files[ argc > 0 ? argc : 1 ];
 
     for( int i = 1; i < argc; ++i ) {
         const char *a = argv[i];
@@ -284,65 +335,28 @@ int main( int argc, char *argv[] ) {
             o.mode = MODE_STMCR;
         } else if( strcmp( a, "--no-lf" ) == 0 ) {
             o.no_lf = 1;
+        } else if( strcmp( a, "--" ) == 0 ) {
+            for( ++i; i < argc; ++i )
+                files[nfiles++] = argv[i];
+            break;
         } else if( a[0] == '-' && a[1] != '\0' ) {
             fprintf( stderr, "catvms: unknown option '%s'\n", a );
             usage( stderr, argv[0] );
             return 1;
-        } else if( path == NULL ) {
-            path = a;
         } else {
-            fprintf( stderr, "catvms: too many file arguments\n" );
-            return 1;
+            files[nfiles++] = (char *)a;
         }
     }
 
-    FILE *in = stdin;
-    if( path != NULL ) {
-        in = fopen( path, "rb" );
-        if( in == NULL ) {
-            fprintf( stderr, "catvms: %s: %s\n", path, strerror( errno ) );
-            return 2;
+    int worst_rc = 0;
+    if( nfiles == 0 ) {
+        if( run_one( &o, NULL ) < 0 ) worst_rc = -1;
+    } else {
+        for( int i = 0; i < nfiles; ++i ) {
+            if( run_one( &o, files[i] ) < 0 ) worst_rc = -1;
         }
     }
 
-    uint8_t *data = NULL;
-    size_t   len  = 0;
-    if( slurp( in, &data, &len ) < 0 ) {
-        fprintf( stderr, "catvms: read failed: %s\n", strerror( errno ) );
-        if( in != stdin ) fclose( in );
-        return 2;
-    }
-    if( in != stdin ) fclose( in );
-
-    enum mode m = o.mode;
-    if( m == MODE_AUTO )
-        m = autodetect( data, len );
-
-    int rc      = 0;
-    int add_lf  = !o.no_lf;
-    switch( m ) {
-    case MODE_VAR:
-        rc = decode_var( data, len, 0, add_lf );
-        break;
-    case MODE_VFC:
-        rc = decode_var( data, len, o.vfc_size, add_lf );
-        break;
-    case MODE_FIX:
-        rc = decode_fix( data, len, (size_t)o.fix_size, add_lf );
-        break;
-    case MODE_STMLF:
-        rc = decode_stmlf( data, len );
-        break;
-    case MODE_STMCR:
-        rc = decode_stmcr( data, len );
-        break;
-    case MODE_AUTO:
-        /* unreachable: autodetect resolved above */
-        rc = decode_stmlf( data, len );
-        break;
-    }
-
-    free( data );
-    if( fflush( stdout ) != 0 ) rc = -1;
-    return rc < 0 ? 2 : 0;
+    if( fflush( stdout ) != 0 ) worst_rc = -1;
+    return worst_rc < 0 ? 2 : 0;
 }
